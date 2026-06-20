@@ -63,7 +63,19 @@ textarea{font-family:'SF Mono','Menlo',monospace;font-size:12px;resize:vertical}
 
 /* Search bar above map */
 .map-toolbar { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
-.map-toolbar input[type=text] { flex: 1; }
+.search-wrap { position: relative; flex: 1; }
+.search-wrap input[type=text] { width: 100%; }
+#searchSuggestions {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.45); overflow: hidden; list-style: none; padding: 4px 0; margin: 0;
+}
+.search-sug {
+  padding: 8px 12px; font-size: 12px; color: var(--text); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--border);
+}
+.search-sug:last-child { border-bottom: none; }
+.search-sug:hover { background: var(--surface2); }
 
 /* Legend chips */
 .map-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--muted); align-items: center; }
@@ -118,7 +130,13 @@ details summary:hover { color: var(--accent); }
 
   <!-- Search bar -->
   <div class="map-toolbar">
-    <input type="text" id="searchInput" placeholder="Search address or place name…" onkeydown="if(event.key==='Enter')searchLocation()">
+    <div class="search-wrap">
+      <input type="text" id="searchInput" placeholder="Search address or place name…"
+        oninput="onSearchInput()"
+        onkeydown="handleSearchKey(event)"
+        autocomplete="off">
+      <ul id="searchSuggestions"></ul>
+    </div>
     <button class="btn btn-ghost btn-sm" onclick="searchLocation()">Search</button>
     <button class="btn btn-ghost btn-sm" onclick="locateMe()" title="Centre on my GPS location">📍 My location</button>
     <button class="btn btn-ghost btn-sm" onclick="clearPolygon()">✕ Clear</button>
@@ -752,6 +770,51 @@ function clearPolygon() {
 }
 
 // ─── SEARCH ──────────────────────────────────────────────────────────────────
+let _sugResults=[], _sugTimer;
+
+function onSearchInput(){
+  clearTimeout(_sugTimer);
+  const q=document.getElementById('searchInput').value.trim();
+  if(q.length<3){hideSuggestions();return;}
+  _sugTimer=setTimeout(()=>fetchSuggestions(q),350);
+}
+
+async function fetchSuggestions(q){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6`,
+      {headers:{'Accept-Language':'en'}});
+    _sugResults=await r.json();
+    const ul=document.getElementById('searchSuggestions');
+    if(!_sugResults.length){hideSuggestions();return;}
+    ul.innerHTML=_sugResults.map((s,i)=>
+      `<li class="search-sug" onmousedown="selectSuggestion(${i})">${s.display_name}</li>`
+    ).join('');
+    ul.style.display='block';
+  }catch{}
+}
+
+function selectSuggestion(i){
+  const s=_sugResults[i];
+  if(!s)return;
+  map.setView([+s.lat,+s.lon],17);
+  document.getElementById('searchInput').value=s.display_name;
+  hideSuggestions();
+}
+
+function hideSuggestions(){
+  document.getElementById('searchSuggestions').style.display='none';
+}
+
+function handleSearchKey(e){
+  if(e.key==='Enter'){searchLocation();hideSuggestions();}
+  if(e.key==='Escape')hideSuggestions();
+}
+
+// Close suggestions when clicking outside
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.search-wrap')) hideSuggestions();
+});
+
 async function searchLocation() {
   const q=document.getElementById('searchInput').value.trim();
   if(!q) return;
