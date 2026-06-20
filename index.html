@@ -560,14 +560,52 @@ function initMap() {
 
   map.pm.setGlobalOptions({ allowSelfIntersection:false, snappable:true, snapDistance:10 });
 
+  // Capture screen-space click positions during rectangle drawing so we can
+  // build a rotation-aware polygon instead of a true-north L.Rectangle.
+  let _rectScreenPts = [];
+  map.on('pm:drawstart', ({shape}) => {
+    if(shape !== 'Rectangle') return;
+    _rectScreenPts = [];
+    const container = map.getContainer();
+    function captureRect(e) {
+      if(e.button !== 0) return;
+      _rectScreenPts.push(map.mouseEventToContainerPoint(e));
+      if(_rectScreenPts.length >= 2) container.removeEventListener('mousedown', captureRect);
+    }
+    container.addEventListener('mousedown', captureRect);
+    map.once('pm:drawend', () => {
+      container.removeEventListener('mousedown', captureRect);
+      _rectScreenPts = [];
+    });
+  });
+
   // Polygon drawn via toolbar
   map.on('pm:create', e => {
     if(!['Polygon','Rectangle'].includes(e.shape)) return;
     if(_pmLayer){ map.removeLayer(_pmLayer); _pmLayer=null; }
+
+    // When map is rotated, replace the north-aligned rectangle with a
+    // screen-aligned polygon by projecting the four screen corners to lat/lng.
+    if(e.shape === 'Rectangle' && _rectScreenPts.length >= 2) {
+      const bearing = map.getBearing ? map.getBearing() : 0;
+      if(Math.abs(bearing) >= 0.5) {
+        const p1 = _rectScreenPts[0], p2 = _rectScreenPts[1];
+        const latlngs = [p1, {x:p2.x,y:p1.y}, p2, {x:p1.x,y:p2.y}]
+          .map(p => map.containerPointToLatLng(L.point(p.x, p.y)));
+        map.removeLayer(e.layer);
+        _pmLayer = L.polygon(latlngs, {color:'#4f9ef8',fillColor:'#4f9ef8',fillOpacity:0.08,weight:2}).addTo(map);
+        _pmLayer.on('pm:edit', syncFromLayer);
+        syncFromLayer();
+        _rectScreenPts = [];
+        return;
+      }
+    }
+
     _pmLayer = e.layer;
     stylePolyLayer(_pmLayer);
     _pmLayer.on('pm:edit', syncFromLayer);
     syncFromLayer();
+    _rectScreenPts = [];
   });
 
   // Polygon deleted via toolbar
