@@ -149,6 +149,7 @@ details summary:hover { color: var(--accent); }
   <!-- Legend -->
   <div class="map-legend">
     <span>Overlays:</span>
+    <span class="legend-chip"><span class="legend-line grid"></span> Grid</span>
     <span class="legend-chip"><span class="legend-line orbit"></span> Orbit</span>
     <span class="legend-chip"><span class="legend-line perim"></span> Perimeter</span>
     <span class="legend-chip"><span class="legend-line centre"></span> Centre D</span>
@@ -169,6 +170,34 @@ details summary:hover { color: var(--accent); }
   <div class="stats-bar" id="areaStats">Draw a polygon on the map to see site stats.</div>
 </div>
 
+<!-- ── MISSION A: GRID ─────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-title">
+    <span class="mission-badge badge-a">A</span>
+    <span class="mission-name">Overhead Grid</span>
+    <span class="mission-desc">Lawnmower pass for full site coverage</span>
+  </div>
+  <div class="grid4">
+    <div class="field"><label>Altitude AGL (m)</label>
+      <input type="number" id="a_alt" value="80" min="20" max="200" oninput="computeAll()"></div>
+    <div class="field"><label>Speed (m/s)</label>
+      <input type="number" id="a_speed" value="8" min="0.5" max="15" step="0.5" oninput="computeA()"></div>
+    <div class="field"><label>Row spacing (m)</label>
+      <input type="number" id="a_spacing" value="32" min="5" max="200" oninput="computeAll()"></div>
+    <div class="field"><label>Grid direction (°)</label>
+      <input type="number" id="a_dir" value="0" min="0" max="179" oninput="computeAll()"></div>
+    <div class="field"><label>Photo interval (s)</label>
+      <input type="number" id="a_interval" value="2" min="0.5" max="10" step="0.5" oninput="computeA()"></div>
+    <div class="field"><label>Buffer (m)</label>
+      <input type="number" id="a_buffer" value="10" min="0" max="50" oninput="computeAll()"></div>
+  </div>
+  <div class="stats-bar" id="a_stats">—</div>
+  <div class="btn-row">
+    <button class="btn btn-a" id="btn_a" onclick="downloadA()">↓ Mission A — Grid 0°</button>
+    <span class="dl-count" id="a_dlcount"></span>
+  </div>
+</div>
+
 <!-- ── MISSION B ──────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-title">
@@ -180,11 +209,11 @@ details summary:hover { color: var(--accent); }
     <div class="field"><label>Altitude AGL — CW (m)</label>
       <input type="number" id="b_alt" value="20" min="5" max="80" oninput="computeAll()"></div>
     <div class="field"><label>Altitude AGL — CCW (m)</label>
-      <input type="number" id="b_alt2" value="15" min="5" max="80" oninput="computeB()"></div>
+      <input type="number" id="b_alt2" value="40" min="5" max="120" oninput="computeB()"></div>
     <div class="field"><label>Radius from centre (m)</label>
-      <input type="number" id="b_radius" value="30" min="5" max="150" oninput="computeAll()"></div>
+      <input type="number" id="b_radius" value="30" min="5" max="500" oninput="computeAll()"></div>
     <div class="field"><label>Speed (m/s)</label>
-      <input type="number" id="b_speed" value="2" min="0.5" max="8" step="0.5" oninput="computeB()"></div>
+      <input type="number" id="b_speed" value="8" min="0.5" max="15" step="0.5" oninput="computeB()"></div>
     <div class="field"><label>Gimbal pitch (°)</label>
       <input type="number" id="b_pitch" value="-35" min="-80" max="-10" oninput="computeB()"></div>
     <div class="field"><label>Waypoints per orbit</label>
@@ -212,15 +241,15 @@ details summary:hover { color: var(--accent); }
   </div>
   <div class="grid4">
     <div class="field"><label>Altitude AGL (m)</label>
-      <input type="number" id="c_alt" value="12" min="5" max="40" oninput="computeC()"></div>
+      <input type="number" id="c_alt" value="30" min="5" max="80" oninput="computeC()"></div>
     <div class="field"><label>Speed (m/s)</label>
-      <input type="number" id="c_speed" value="1.5" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
+      <input type="number" id="c_speed" value="8" min="0.5" max="15" step="0.5" oninput="computeC()"></div>
     <div class="field"><label>Gimbal pitch (°)</label>
       <input type="number" id="c_pitch" value="-25" min="-90" max="-5" oninput="computeC()"></div>
     <div class="field"><label>Photo interval (s)</label>
       <input type="number" id="c_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
     <div class="field"><label>Inset from boundary (m)</label>
-      <input type="number" id="c_offset" value="8" min="0" max="40" oninput="computeAll()"></div>
+      <input type="number" id="c_offset" value="0" min="0" max="40" oninput="computeAll()"></div>
     <div class="field"><label>Passes</label>
       <select id="c_passes" onchange="computeC()">
         <option value="1">1 pass</option>
@@ -445,7 +474,7 @@ function circleToPolygon(center, radiusM, nPts=60) {
 
 // ─── MAP ─────────────────────────────────────────────────────────────────────
 let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false, _satBtn=null, _fhBtn=null;
-const _ov={orbitCW:null,orbitCCW:null,perim:null,centre:null};
+const _ov={grid:null,orbitCW:null,orbitCCW:null,perim:null,centre:null};
 
 function toggleSatellite(){
   _satActive=!_satActive;
@@ -737,6 +766,24 @@ function locateMe() {
 
 // ─── MAP OVERLAYS ─────────────────────────────────────────────────────────────
 // Returns [[lat,lng],[lat,lng]] pairs for each grid row
+function getGridLines(pts, angleDeg) {
+  if(pts.length<3) return [];
+  const c=centroid(pts), buf=n('a_buffer',10), rowSpacing=n('a_spacing',32);
+  if(rowSpacing<=0) return [];
+  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
+  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
+  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
+  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
+  const lines=[];
+  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing){
+    const s=fromLocal(px*p+dx*minD,py*p+dy*minD,c.lat,c.lng);
+    const e=fromLocal(px*p+dx*maxD,py*p+dy*maxD,c.lat,c.lng);
+    lines.push([[s.lat,s.lng],[e.lat,e.lng]]);
+  }
+  return lines;
+}
+
 // Returns [[lat,lng],...] for orbit circle
 function getOrbitPoints(pts, dir) {
   if(pts.length<3) return [];
@@ -759,6 +806,12 @@ function updateMapOverlays() {
   if(pts.length<3) return;
 
   const polyOpts={interactive:false};
+
+  // Grid A
+  const gLines=getGridLines(pts,n('a_dir',0));
+  if(gLines.length) _ov.grid=L.layerGroup(gLines.map(ll=>
+    L.polyline(ll,{...polyOpts,color:'#4f9ef8',opacity:0.45,weight:1.2,dashArray:'4 3'})
+  )).addTo(map);
 
   // Orbit CW
   const oCW=getOrbitPoints(pts,'cw');
@@ -790,6 +843,62 @@ function fmtTime(secs){
   const m=Math.floor(secs/60), s=Math.round(secs%60);
   return s>0?`${m}m ${s}s`:`${m}m`;
 }
+
+// ─── MISSION A: GRID ─────────────────────────────────────────────────────────
+function gridPathLength(pts, angleDeg) {
+  if(pts.length<3) return 0;
+  const c=centroid(pts), buf=n('a_buffer',10), rowSpacing=n('a_spacing',32);
+  if(rowSpacing<=0) return 0;
+  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
+  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
+  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
+  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
+  const rowLen=maxD-minD; let nRows=0;
+  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing) nRows++;
+  return nRows*rowLen + Math.max(0,nRows-1)*rowSpacing;
+}
+
+function buildGrid(pts, angleDeg) {
+  if(pts.length<3) return [];
+  const c=centroid(pts), alt=n('a_alt',80), speed=Math.max(0.1,n('a_speed',8));
+  const ival=n('a_interval',2), buf=n('a_buffer',10), rowSpacing=n('a_spacing',32);
+  if(rowSpacing<=0) return [];
+  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
+  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
+  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
+  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
+  const rows=[]; let fwd=true;
+  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing){
+    const sD=fwd?minD:maxD, eD=fwd?maxD:minD;
+    const s=fromLocal(px*p+dx*sD,py*p+dy*sD,c.lat,c.lng);
+    const e=fromLocal(px*p+dx*eD,py*p+dy*eD,c.lat,c.lng);
+    const hdg=fwd?angleDeg%360:(angleDeg+180)%360;
+    rows.push(wp({lat:s.lat,lng:s.lng,alt,hdg,pitch:0,speed,interval:ival}));
+    rows.push(wp({lat:e.lat,lng:e.lng,alt,hdg,pitch:0,speed,interval:-1}));
+    fwd=!fwd;
+  }
+  return rows;
+}
+
+function computeA() {
+  const dir=n('a_dir',0);
+  document.getElementById('btn_a').textContent=`↓ Mission A — Grid ${dir}°`;
+  const pts=parsePoly();
+  if(pts.length<3){document.getElementById('a_stats').innerHTML='—';return;}
+  const speed=Math.max(0.1,n('a_speed',8)), rowSpacing=n('a_spacing',32);
+  const rows=buildGrid(pts,dir), len=gridPathLength(pts,dir);
+  const t=fmtTime(len/speed);
+  document.getElementById('a_stats').innerHTML=
+    `Row spacing <span class="sv">${rowSpacing} m</span> · `+
+    `Path length <span class="sv">${len.toFixed(0)} m</span> · `+
+    `<span class="sv${rows.length>99?' warn':''}">${rows.length} WP</span> · `+
+    `<span class="sv">~${t}</span>`+
+    (rows.length>99?` · <span class="warn">⚠ >99 WP — split into smaller areas</span>`:'');
+}
+
+function downloadA(){const d=n('a_dir',0);doDownload(buildGrid(parsePoly(),d),`mission_A_grid_${d}deg.csv`,'a_dlcount',`Grid ${d}°`);}
 
 // ─── MISSION B: ORBIT ────────────────────────────────────────────────────────
 function buildOrbit(pts, dir, altOverride) {
@@ -925,8 +1034,9 @@ function downloadAll(){
   const pts=parsePoly();
   if(pts.length<3){alert('Draw a polygon on the map first.');return;}
   const files=[
+    [buildGrid(pts,n('a_dir',0)),`mission_A_grid_${n('a_dir',0)}deg.csv`],
     [buildOrbit(pts,'cw'),'mission_B_orbit_CW.csv'],
-    [buildOrbit(pts,'ccw',n('b_alt2',15)),'mission_B_orbit_CCW.csv'],
+    [buildOrbit(pts,'ccw',n('b_alt2',40)),'mission_B_orbit_CCW.csv'],
     [buildPerimeter(pts),'mission_C_pass1.csv'],
   ];
   if(n('c_passes',1)>1) files.push([buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv']);
@@ -973,19 +1083,22 @@ function updateTotalTime() {
   if(!el) return;
   const pts=parsePoly();
   if(pts.length<3){el.innerHTML='Draw a polygon to see total time estimate.';return;}
-  const bSpeed=Math.max(0.1,n('b_speed',2));
-  const cSpeed=Math.max(0.1,n('c_speed',1.5));
+  const aSpeed=Math.max(0.1,n('a_speed',8));
+  const bSpeed=Math.max(0.1,n('b_speed',8));
+  const cSpeed=Math.max(0.1,n('c_speed',8));
   const circ=2*Math.PI*n('b_radius',30);
   const passes=n('c_passes',1);
-  const insetPerim=polyPerimeter(insetPoly(pts,n('c_offset',8)));
+  const insetPerim=polyPerimeter(insetPoly(pts,n('c_offset',0)));
   const dSpeed=Math.max(0.1,n('d_speed',3)), dRadius=n('d_radius',30);
+  const secA=gridPathLength(pts,n('a_dir',0))/aSpeed;
   const secB=circ*2/bSpeed; // CW + CCW
   const secC=insetPerim*passes/cSpeed;
   const secD=dRadius*(1+2*Math.PI)/dSpeed;
-  const total=secB+secC+secD;
+  const total=secA+secB+secC+secD;
   el.innerHTML=
     `<strong>Total estimated airtime:</strong> `+
     `<span class="sv" style="font-size:14px">${fmtTime(total)}</span> `+
+    `&nbsp;·&nbsp; Grid A: <span class="sv">${fmtTime(secA)}</span> `+
     `&nbsp;·&nbsp; Orbit B ×2: <span class="sv">${fmtTime(secB)}</span> `+
     `&nbsp;·&nbsp; Perimeter C: <span class="sv">${fmtTime(secC)}</span> `+
     `&nbsp;·&nbsp; Centre D: <span class="sv">${fmtTime(secD)}</span>`+
@@ -996,7 +1109,7 @@ function updateTotalTime() {
 function computeAll(){
   const pts=parsePoly();
   updateAreaStats(pts);
-  computeB(); computeC(); computeD();
+  computeA(); computeB(); computeC(); computeD();
   updateTotalTime();
   updateMapOverlays();
 }
