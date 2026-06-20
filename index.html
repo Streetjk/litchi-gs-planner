@@ -105,6 +105,7 @@ details summary:hover { color: var(--accent); }
     <input type="text" id="searchInput" placeholder="Search address or place name…" onkeydown="if(event.key==='Enter')searchLocation()">
     <button class="btn btn-ghost btn-sm" onclick="searchLocation()">Search</button>
     <button class="btn btn-ghost btn-sm" onclick="locateMe()" title="Centre on my GPS location">📍 My location</button>
+    <button id="btn_freehand" class="btn btn-ghost btn-sm" onclick="toggleFreehand()" title="Hold mouse button and drag to trace your site boundary">✏️ Freehand</button>
     <button class="btn btn-ghost btn-sm" onclick="clearPolygon()">✕ Clear</button>
     <button class="btn btn-ghost btn-sm" onclick="loadExample()">Load example</button>
   </div>
@@ -383,6 +384,86 @@ function footprint(alt) {
   const hFOV=+document.getElementById('hFOV').value||78.8, ar=+document.getElementById('aspectRatio').value||1.3333;
   const vFOV=R2D*2*Math.atan(Math.tan(hFOV/2*D2R)/ar);
   return {fw:2*alt*Math.tan(hFOV/2*D2R),fh:2*alt*Math.tan(vFOV/2*D2R)};
+}
+
+// ─── FREEHAND DRAW ───────────────────────────────────────────────────────────
+let _fhActive=false, _fhPts=[], _fhPreview=null;
+
+function toggleFreehand(){
+  _fhActive=!_fhActive;
+  const btn=document.getElementById('btn_freehand');
+  btn.textContent=_fhActive?'⏹ Stop drawing':'✏️ Freehand';
+  btn.style.borderColor=_fhActive?'var(--accent)':'';
+  btn.style.color=_fhActive?'var(--accent)':'';
+  if(_fhActive){
+    map.pm.disableDraw(); // cancel any active Geoman tool
+    map.dragging.disable();
+    map.getContainer().style.cursor='crosshair';
+    map.on('mousedown',fhStart);
+  } else {
+    _fhCleanup();
+  }
+}
+
+function fhStart(e){
+  _fhPts=[e.latlng];
+  map.on('mousemove',fhMove);
+  map.on('mouseup',fhEnd);
+}
+
+function fhMove(e){
+  _fhPts.push(e.latlng);
+  if(_fhPreview) map.removeLayer(_fhPreview);
+  _fhPreview=L.polyline(_fhPts,{color:'#4f9ef8',weight:2,opacity:.6}).addTo(map);
+}
+
+function fhEnd(){
+  map.off('mousemove',fhMove);
+  map.off('mouseup',fhEnd);
+  if(_fhPreview){map.removeLayer(_fhPreview);_fhPreview=null;}
+  if(_fhPts.length>=6){
+    const simplified=dpSimplify(_fhPts,0.00004); // ~4m tolerance
+    if(simplified.length>=3){
+      if(_pmLayer){map.removeLayer(_pmLayer);_pmLayer=null;}
+      _pmLayer=L.polygon(simplified,{color:'#4f9ef8',fillColor:'#4f9ef8',fillOpacity:.08,weight:2}).addTo(map);
+      _pmLayer.on('pm:edit',syncFromLayer);
+      syncFromLayer();
+    }
+  }
+  _fhPts=[];
+  // Auto-deactivate
+  _fhActive=false;
+  const btn=document.getElementById('btn_freehand');
+  btn.textContent='✏️ Freehand';
+  btn.style.borderColor='';
+  btn.style.color='';
+  _fhCleanup();
+}
+
+function _fhCleanup(){
+  map.off('mousedown',fhStart);
+  map.off('mousemove',fhMove);
+  map.off('mouseup',fhEnd);
+  map.dragging.enable();
+  map.getContainer().style.cursor='';
+}
+
+// Ramer-Douglas-Peucker path simplification (works on L.LatLng objects)
+function dpSimplify(pts,tol){
+  if(pts.length<=2) return pts;
+  const p1=pts[0],p2=pts[pts.length-1];
+  const dx=p2.lng-p1.lng, dy=p2.lat-p1.lat, len=Math.hypot(dx,dy);
+  let maxD=0,maxI=0;
+  for(let i=1;i<pts.length-1;i++){
+    const d=len===0?Math.hypot(pts[i].lat-p1.lat,pts[i].lng-p1.lng)
+      :Math.abs((pts[i].lat-p1.lat)*dx-(pts[i].lng-p1.lng)*dy)/len;
+    if(d>maxD){maxD=d;maxI=i;}
+  }
+  if(maxD>tol){
+    const l=dpSimplify(pts.slice(0,maxI+1),tol), r=dpSimplify(pts.slice(maxI),tol);
+    return [...l.slice(0,-1),...r];
+  }
+  return [p1,p2];
 }
 
 // ─── MAP ─────────────────────────────────────────────────────────────────────
