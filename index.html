@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Litchi GS Mission Planner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css"/>
 <style>
 :root {
   --bg:#0d0f18;--surface:#141720;--surface2:#1d2030;--surface3:#252840;
@@ -12,7 +14,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',system-ui,sans-serif;
-  font-size:13px;line-height:1.5;padding:24px 20px 60px;max-width:920px;margin:0 auto}
+  font-size:13px;line-height:1.5;padding:24px 20px 60px;max-width:960px;margin:0 auto}
 h1{font-size:20px;font-weight:700;color:#fff}
 .tagline{color:var(--muted);font-size:12px;margin-top:4px;margin-bottom:28px}
 h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px}
@@ -24,8 +26,6 @@ h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 .badge-c{background:rgba(245,158,11,.18);color:#fbbf4a}
 .mission-name{font-size:14px;font-weight:600;color:#fff}
 .mission-desc{font-size:11px;color:var(--muted);margin-left:auto}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
 .field{display:flex;flex-direction:column;gap:4px}
 label{font-size:11px;color:var(--muted)}
@@ -40,6 +40,7 @@ textarea{font-family:'SF Mono','Menlo',monospace;font-size:12px;resize:vertical}
 .btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.97)}
 .btn-primary{background:var(--accent);color:#fff}
 .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-sm{padding:6px 12px;font-size:12px}
 .btn-a{background:#2256a8;color:#7eb8ff}
 .btn-b{background:#1a6644;color:#5de0a8}
 .btn-c{background:#7a5218;color:#fbbf4a}
@@ -50,43 +51,92 @@ textarea{font-family:'SF Mono','Menlo',monospace;font-size:12px;resize:vertical}
   color:var(--muted);margin-top:12px;display:flex;flex-wrap:wrap;gap:0 16px;line-height:1.8}
 .warn{color:var(--red)!important}
 .tip{background:rgba(79,158,248,.07);border:1px solid rgba(79,158,248,.18);border-radius:7px;
-  padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+  padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6}
 .tip strong{color:var(--accent)}
 .tip code{background:var(--surface3);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:11px;color:var(--text)}
-canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;margin-top:12px;cursor:crosshair}
 .dl-count{font-size:11px;color:var(--green);margin-left:4px}
 .small{font-size:11px;color:var(--muted);margin-top:5px}
+
+/* ── Map ── */
+#map { height: 460px; border-radius: 10px; margin-top: 12px; border: 1px solid var(--border); }
+
+/* Search bar above map */
+.map-toolbar { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.map-toolbar input[type=text] { flex: 1; }
+
+/* Legend chips */
+.map-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--muted); align-items: center; }
+.legend-chip { display: flex; align-items: center; gap: 5px; }
+.legend-line { width: 20px; height: 2px; display: inline-block; border-radius: 1px; }
+.legend-line.grid { background: #4f9ef8; opacity: 0.7; }
+.legend-line.orbit { background: #3fcf8e; }
+.legend-line.perim { background: #f59e0b; border-top: 2px dashed #f59e0b; height: 0; }
+
+/* Collapsible coordinate import */
+details { margin-top: 10px; }
+details summary {
+  cursor: pointer; font-size: 11px; color: var(--muted);
+  padding: 6px 0; user-select: none; list-style: none;
+  display: flex; align-items: center; gap: 5px;
+}
+details summary::before { content: '▶'; font-size: 9px; transition: transform .2s; }
+details[open] summary::before { transform: rotate(90deg); }
+details summary:hover { color: var(--accent); }
+
+/* Geoman toolbar dark-bg map — keep light since OSM tiles are light */
+.leaflet-pm-toolbar .button-container button { border-radius: 4px !important; }
 </style>
 </head>
 <body>
 
 <h1>Litchi Gaussian Splat Mission Planner</h1>
-<p class="tagline">Generates Litchi Hub–compatible waypoint CSV files for 3DGS drone capture — Missions A (grid) · B (orbit) · C (perimeter)</p>
+<p class="tagline">Draw your site on the map — generates Litchi Hub CSV files for 3DGS drone capture · Missions A (grid) · B (orbit) · C (perimeter)</p>
 
-<!-- AREA -->
+<!-- ── AREA ──────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-title"><h2>1 — Capture Area</h2></div>
+
   <div class="tip">
-    <strong>Getting coordinates from Google Maps:</strong> Right-click any corner → <strong>What's here?</strong> → tap the lat,lng shown at the bottom to copy. Repeat for each corner. Paste below, one <code>lat, lng</code> per line. 4 points = rectangle; add more for irregular shapes.
+    <strong>Draw your site:</strong> Use the <strong>polygon</strong> or <strong>rectangle</strong> tool on the map toolbar (top-left). Click to place each corner, double-click to finish. Use the edit/drag tools to adjust. Search for your location below.
   </div>
-  <div class="grid2" style="gap:14px;align-items:start">
-    <div class="field">
-      <label>Polygon corners — lat, lng (one per line, ≥ 3 points)</label>
-      <textarea id="polygon" rows="8"
-        placeholder="-31.950200, 115.860200&#10;-31.950200, 115.861400&#10;-31.951100, 115.861400&#10;-31.951100, 115.860200"
-        oninput="scheduleUpdate()"></textarea>
-      <div class="small">Clockwise or counter-clockwise — both work.</div>
-      <div class="btn-row" style="margin-top:8px">
-        <button class="btn btn-ghost" onclick="loadExample()">Load example site</button>
-        <button class="btn btn-primary" onclick="computeAll()">↻ Update</button>
-      </div>
+
+  <!-- Search bar -->
+  <div class="map-toolbar">
+    <input type="text" id="searchInput" placeholder="Search address or place name…" onkeydown="if(event.key==='Enter')searchLocation()">
+    <button class="btn btn-ghost btn-sm" onclick="searchLocation()">Search</button>
+    <button class="btn btn-ghost btn-sm" onclick="locateMe()" title="Centre on my GPS location">📍 My location</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearPolygon()">✕ Clear</button>
+    <button class="btn btn-ghost btn-sm" onclick="loadExample()">Load example</button>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Legend -->
+  <div class="map-legend">
+    <span>Overlays:</span>
+    <span class="legend-chip"><span class="legend-line grid"></span> Grid A</span>
+    <span class="legend-chip" style="opacity:.6"><span class="legend-line grid"></span> Grid B</span>
+    <span class="legend-chip"><span class="legend-line orbit"></span> Orbit</span>
+    <span class="legend-chip"><span class="legend-line perim"></span> Perimeter</span>
+  </div>
+
+  <!-- Collapsible coordinate import / export -->
+  <details>
+    <summary>Import / export coordinates (Google Maps, paste lat,lng)</summary>
+    <div class="tip" style="margin-top:8px">
+      Right-click any corner on Google Maps → <strong>What's here?</strong> → tap the lat,lng to copy. Paste below, one pair per line. Changes sync to the map automatically.
     </div>
-    <canvas id="preview" height="220"></canvas>
-  </div>
-  <div class="stats-bar" id="areaStats">Enter polygon coordinates above to see site stats.</div>
+    <textarea id="polygon" rows="6"
+      placeholder="-31.950200, 115.860200&#10;-31.950200, 115.861400&#10;-31.951100, 115.861400&#10;-31.951100, 115.860200"
+      oninput="scheduleUpdate()"></textarea>
+    <div class="small" style="margin-top:4px">Clockwise or counter-clockwise — both work. Editing the map updates this automatically.</div>
+  </details>
+
+  <div class="stats-bar" id="areaStats">Draw a polygon on the map to see site stats.</div>
 </div>
 
-<!-- CAMERA -->
+<!-- ── CAMERA ──────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-title"><h2>2 — Camera Profile</h2></div>
   <div class="grid4">
@@ -120,7 +170,7 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </div>
 </div>
 
-<!-- MISSION A -->
+<!-- ── MISSION A ──────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-title">
     <span class="mission-badge badge-a">A</span>
@@ -129,26 +179,26 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </div>
   <div class="grid4">
     <div class="field"><label>Altitude AGL (m)</label>
-      <input type="number" id="a_alt" value="40" min="20" max="120" oninput="computeA()"></div>
+      <input type="number" id="a_alt" value="40" min="20" max="120" oninput="computeAll()"></div>
     <div class="field"><label>Speed (m/s)</label>
       <input type="number" id="a_speed" value="3" min="0.5" max="10" step="0.5" oninput="computeA()"></div>
     <div class="field"><label>Photo interval (s)</label>
       <input type="number" id="a_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeA()"></div>
     <div class="field"><label>Side overlap (%)</label>
-      <input type="number" id="a_sideOverlap" value="75" min="50" max="90" oninput="computeA()"></div>
+      <input type="number" id="a_sideOverlap" value="75" min="50" max="90" oninput="computeAll()"></div>
     <div class="field"><label>Gimbal pitch (°)</label>
       <input type="number" id="a_pitch" value="-80" min="-90" max="-45" oninput="computeA()"></div>
     <div class="field"><label>Perimeter buffer (m)</label>
-      <input type="number" id="a_buffer" value="15" min="0" max="80" oninput="computeA()"></div>
+      <input type="number" id="a_buffer" value="15" min="0" max="80" oninput="computeAll()"></div>
     <div class="field"><label>Start direction</label>
-      <select id="a_startDir" onchange="computeA()">
+      <select id="a_startDir" onchange="computeAll()">
         <option value="0">0° — N↔S rows</option>
         <option value="90">90° — E↔W rows</option>
         <option value="45">45° diagonal</option>
       </select>
     </div>
     <div class="field"><label>Cross-grid offset</label>
-      <select id="a_crossDir" onchange="computeA()">
+      <select id="a_crossDir" onchange="computeAll()">
         <option value="90">+90°</option>
         <option value="45">+45°</option>
         <option value="60">+60°</option>
@@ -163,7 +213,7 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </div>
 </div>
 
-<!-- MISSION B -->
+<!-- ── MISSION B ──────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-title">
     <span class="mission-badge badge-b">B</span>
@@ -172,22 +222,22 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </div>
   <div class="grid4">
     <div class="field"><label>Altitude AGL — CW (m)</label>
-      <input type="number" id="b_alt" value="20" min="5" max="80" oninput="computeB()"></div>
+      <input type="number" id="b_alt" value="20" min="5" max="80" oninput="computeAll()"></div>
     <div class="field"><label>Altitude AGL — CCW (m)</label>
       <input type="number" id="b_alt2" value="15" min="5" max="80" oninput="computeB()"></div>
     <div class="field"><label>Radius from centre (m)</label>
-      <input type="number" id="b_radius" value="30" min="5" max="150" oninput="computeB()"></div>
+      <input type="number" id="b_radius" value="30" min="5" max="150" oninput="computeAll()"></div>
     <div class="field"><label>Speed (m/s)</label>
       <input type="number" id="b_speed" value="2" min="0.5" max="8" step="0.5" oninput="computeB()"></div>
     <div class="field"><label>Gimbal pitch (°)</label>
       <input type="number" id="b_pitch" value="-35" min="-80" max="-10" oninput="computeB()"></div>
     <div class="field"><label>Waypoints per orbit</label>
-      <input type="number" id="b_points" value="24" min="8" max="72" step="4" oninput="computeB()"></div>
+      <input type="number" id="b_points" value="24" min="8" max="72" step="4" oninput="computeAll()"></div>
     <div class="field"><label>Photo interval (s)</label>
       <input type="number" id="b_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeB()"></div>
     <div class="field"><label>Start bearing (°)</label>
-      <input type="number" id="b_startBearing" value="0" min="0" max="359" oninput="computeB()"
-        title="Compass bearing where the orbit begins. 0=North, 90=East. Start on the safest side."></div>
+      <input type="number" id="b_startBearing" value="0" min="0" max="359" oninput="computeAll()"
+        title="Compass bearing where the orbit begins. 0=North, 90=East."></div>
   </div>
   <div class="stats-bar" id="b_stats">—</div>
   <div class="btn-row">
@@ -197,7 +247,7 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </div>
 </div>
 
-<!-- MISSION C -->
+<!-- ── MISSION C ──────────────────────────────────────────────── -->
 <div class="card">
   <div class="card-title">
     <span class="mission-badge badge-c">C</span>
@@ -214,7 +264,7 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
     <div class="field"><label>Photo interval (s)</label>
       <input type="number" id="c_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
     <div class="field"><label>Inset from boundary (m)</label>
-      <input type="number" id="c_offset" value="8" min="0" max="40" oninput="computeC()"></div>
+      <input type="number" id="c_offset" value="8" min="0" max="40" oninput="computeAll()"></div>
     <div class="field"><label>Passes</label>
       <select id="c_passes" onchange="computeC()">
         <option value="1">1 pass</option>
@@ -234,7 +284,7 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </div>
 </div>
 
-<!-- DOWNLOAD ALL -->
+<!-- ── DOWNLOAD ALL ──────────────────────────────────────────────── -->
 <div class="card" style="text-align:center;padding:24px">
   <button class="btn btn-all" onclick="downloadAll()">↓ Download All Missions</button>
   <p class="small" style="margin-top:10px">
@@ -243,9 +293,11 @@ canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;mar
   </p>
 </div>
 
+<!-- Leaflet + Geoman JS (after DOM) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script>
 // ─── LITCHI CSV ──────────────────────────────────────────────────────────────
-// 46-column Litchi Hub waypoint format
 const HEADER = [
   'latitude','longitude','altitude(m)','heading(deg)','curvesize(m)','rotationdir',
   'gimbalmode','gimbalpitchangle',
@@ -259,19 +311,16 @@ const NO_ACTIONS = Array(30).fill(-1);
 
 function wp({lat, lng, alt, hdg=-1, pitch=-80, speed=3, interval=-1}) {
   return [
-    lat.toFixed(7), lng.toFixed(7),
-    alt.toFixed(1),
+    lat.toFixed(7), lng.toFixed(7), alt.toFixed(1),
     Math.round(hdg < 0 ? -1 : hdg),
-    0,   // curvesize
-    0,   // rotationdir: auto
-    2,   // gimbalmode: INTERPOLATE — pitch is actually applied (was 0=disabled)
+    0, 0,
+    2,   // gimbalmode: INTERPOLATE (0=disabled, pitch ignored)
     Math.round(pitch),
     ...NO_ACTIONS,
-    0,   // altitudemode: AGL
-    Math.max(0.1, speed).toFixed(1),
-    0, 0, 0, 0,  // POI unused
+    0, Math.max(0.1, speed).toFixed(1),
+    0, 0, 0, 0,
     interval > 0 ? interval.toFixed(1) : -1,
-    -1   // photo_distinterval
+    -1
   ].join(',');
 }
 
@@ -281,125 +330,246 @@ function makeCSV(rows) { return [HEADER, ...rows].join('\n'); }
 const R2D = 180/Math.PI, D2R = Math.PI/180;
 const M_PER_DEG_LAT = 111320;
 const mPerDegLng = lat => 111320 * Math.cos(lat * D2R);
-
-const centroid = pts => ({
-  lat: pts.reduce((s,p)=>s+p.lat,0)/pts.length,
-  lng: pts.reduce((s,p)=>s+p.lng,0)/pts.length
-});
-
-const toLocal = (lat,lng,cLat,cLng) => ({
-  x: (lng-cLng)*mPerDegLng(cLat), y: (lat-cLat)*M_PER_DEG_LAT
-});
-
-const fromLocal = (x,y,cLat,cLng) => ({
-  lat: cLat + y/M_PER_DEG_LAT, lng: cLng + x/mPerDegLng(cLat)
-});
+const centroid = pts => ({ lat: pts.reduce((s,p)=>s+p.lat,0)/pts.length, lng: pts.reduce((s,p)=>s+p.lng,0)/pts.length });
+const toLocal = (lat,lng,cLat,cLng) => ({ x:(lng-cLng)*mPerDegLng(cLat), y:(lat-cLat)*M_PER_DEG_LAT });
+const fromLocal = (x,y,cLat,cLng) => ({ lat:cLat+y/M_PER_DEG_LAT, lng:cLng+x/mPerDegLng(cLat) });
 
 function signedArea2(local) {
-  let a = 0;
-  for (let i=0; i<local.length; i++) {
-    const j=(i+1)%local.length;
-    a += local[i].x*local[j].y - local[j].x*local[i].y;
-  }
+  let a=0;
+  for(let i=0;i<local.length;i++){const j=(i+1)%local.length;a+=local[i].x*local[j].y-local[j].x*local[i].y;}
   return a;
 }
-
 function polyArea(pts) {
-  const c = centroid(pts);
-  return Math.abs(signedArea2(pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng))))/2;
+  const c=centroid(pts); return Math.abs(signedArea2(pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng))))/2;
 }
-
 function polyPerimeter(pts) {
-  const c = centroid(pts);
-  let p=0;
-  for (let i=0;i<pts.length;i++) {
-    const j=(i+1)%pts.length;
-    const a=toLocal(pts[i].lat,pts[i].lng,c.lat,c.lng);
-    const b=toLocal(pts[j].lat,pts[j].lng,c.lat,c.lng);
-    p+=Math.hypot(b.x-a.x,b.y-a.y);
-  }
+  const c=centroid(pts); let p=0;
+  for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length,a=toLocal(pts[i].lat,pts[i].lng,c.lat,c.lng),b=toLocal(pts[j].lat,pts[j].lng,c.lat,c.lng);p+=Math.hypot(b.x-a.x,b.y-a.y);}
   return p;
 }
-
 function maxRadius(pts,c) {
   return Math.max(...pts.map(p=>{const l=toLocal(p.lat,p.lng,c.lat,c.lng);return Math.hypot(l.x,l.y);}));
 }
-
 function bearing(lat1,lng1,lat2,lng2) {
-  const dL=(lng2-lng1)*D2R;
-  const y=Math.sin(dL)*Math.cos(lat2*D2R);
+  const dL=(lng2-lng1)*D2R, y=Math.sin(dL)*Math.cos(lat2*D2R);
   const x=Math.cos(lat1*D2R)*Math.sin(lat2*D2R)-Math.sin(lat1*D2R)*Math.cos(lat2*D2R)*Math.cos(dL);
   return (Math.atan2(y,x)*R2D+360)%360;
 }
 
+// ─── INPUT ────────────────────────────────────────────────────────────────────
+function parsePoly() {
+  return document.getElementById('polygon').value.trim().split('\n').filter(l=>l.trim()).map(l=>{
+    const p=l.trim().replace(/[()]/g,'').split(/[\s,]+/);
+    if(p.length<2)return null;
+    const lat=parseFloat(p[0]),lng=parseFloat(p[1]);
+    return isNaN(lat)||isNaN(lng)?null:{lat,lng};
+  }).filter(Boolean);
+}
+function n(id,fb=1){const v=parseFloat(document.getElementById(id).value);return isNaN(v)?fb:v;}
+
 // ─── CAMERA ──────────────────────────────────────────────────────────────────
 const CAMERAS = {
-  mavic1:{hFOV:78.8,ar:4/3}, mavic2pro:{hFOV:68.9,ar:4/3},
-  mavic3:{hFOV:73.7,ar:4/3}, mini3:{hFOV:82.1,ar:4/3},
-  air2s:{hFOV:88.0,ar:4/3},  custom:null
+  mavic1:{hFOV:78.8,ar:4/3},mavic2pro:{hFOV:68.9,ar:4/3},mavic3:{hFOV:73.7,ar:4/3},
+  mini3:{hFOV:82.1,ar:4/3},air2s:{hFOV:88.0,ar:4/3},custom:null
 };
-
 function applyCamera() {
-  const p = CAMERAS[document.getElementById('cameraPreset').value];
-  if (!p) return;
-  document.getElementById('hFOV').value = p.hFOV;
-  document.getElementById('aspectRatio').value = p.ar.toFixed(4);
+  const p=CAMERAS[document.getElementById('cameraPreset').value];
+  if(!p)return;
+  document.getElementById('hFOV').value=p.hFOV;
+  document.getElementById('aspectRatio').value=p.ar.toFixed(4);
+  computeAll();
+}
+function footprint(alt) {
+  const hFOV=+document.getElementById('hFOV').value||78.8, ar=+document.getElementById('aspectRatio').value||1.3333;
+  const vFOV=R2D*2*Math.atan(Math.tan(hFOV/2*D2R)/ar);
+  return {fw:2*alt*Math.tan(hFOV/2*D2R),fh:2*alt*Math.tan(vFOV/2*D2R)};
+}
+
+// ─── MAP ─────────────────────────────────────────────────────────────────────
+let map, _pmLayer=null;
+const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null};
+
+function initMap() {
+  map = L.map('map').setView([-31.9505, 115.8605], 16);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+    maxZoom:20
+  }).addTo(map);
+
+  map.pm.addControls({
+    position:'topleft',
+    drawMarker:false, drawCircleMarker:false, drawPolyline:false,
+    drawRectangle:true, drawPolygon:true, drawCircle:false, drawText:false,
+    editMode:true, dragMode:true, cutPolygon:false, removalMode:true
+  });
+
+  map.pm.setGlobalOptions({ allowSelfIntersection:false, snappable:true, snapDistance:10 });
+
+  // Polygon drawn via toolbar
+  map.on('pm:create', e => {
+    if(!['Polygon','Rectangle'].includes(e.shape)) return;
+    if(_pmLayer){ map.removeLayer(_pmLayer); _pmLayer=null; }
+    _pmLayer = e.layer;
+    stylePolyLayer(_pmLayer);
+    _pmLayer.on('pm:edit', syncFromLayer);
+    syncFromLayer();
+  });
+
+  // Polygon deleted via toolbar
+  map.on('pm:remove', e => {
+    if(e.layer===_pmLayer){
+      _pmLayer=null;
+      document.getElementById('polygon').value='';
+      computeAll();
+    }
+  });
+
+  // pm:dragend fires on the MAP in Geoman v2, not the layer
+  map.on('pm:dragend pm:rotateend', e => {
+    if(_pmLayer && e.layer===_pmLayer) syncFromLayer();
+  });
+}
+
+function stylePolyLayer(layer) {
+  layer.setStyle({color:'#4f9ef8',fillColor:'#4f9ef8',fillOpacity:0.08,weight:2});
+}
+
+// Map layer → textarea
+function syncFromLayer() {
+  if(!_pmLayer) return;
+  const ll = _pmLayer.getLatLngs()[0];
+  document.getElementById('polygon').value = ll.map(p=>`${p.lat.toFixed(7)}, ${p.lng.toFixed(7)}`).join('\n');
   computeAll();
 }
 
-function footprint(alt) {
-  const hFOV = +document.getElementById('hFOV').value || 78.8;
-  const ar   = +document.getElementById('aspectRatio').value || 1.3333;
-  const vFOV = R2D*2*Math.atan(Math.tan(hFOV/2*D2R)/ar);
-  return { fw: 2*alt*Math.tan(hFOV/2*D2R), fh: 2*alt*Math.tan(vFOV/2*D2R) };
+// Textarea / external → map layer
+function syncToMap(pts) {
+  if(_pmLayer){ map.removeLayer(_pmLayer); _pmLayer=null; }
+  if(pts.length<3) return;
+  const ll = pts.map(p=>L.latLng(p.lat,p.lng));
+  _pmLayer = L.polygon(ll).addTo(map);
+  stylePolyLayer(_pmLayer);
+  _pmLayer.on('pm:edit', syncFromLayer);
+  try{ map.fitBounds(_pmLayer.getBounds().pad(0.25)); } catch(e){}
 }
 
-// ─── INPUT HELPERS ────────────────────────────────────────────────────────────
-function parsePoly() {
-  return document.getElementById('polygon').value.trim()
-    .split('\n').filter(l=>l.trim())
-    .map(l=>{
-      const p=l.trim().replace(/[()]/g,'').split(/[\s,]+/);
-      if(p.length<2)return null;
-      const lat=parseFloat(p[0]),lng=parseFloat(p[1]);
-      return isNaN(lat)||isNaN(lng)?null:{lat,lng};
-    }).filter(Boolean);
+function clearPolygon() {
+  if(_pmLayer){ map.removeLayer(_pmLayer); _pmLayer=null; }
+  document.getElementById('polygon').value='';
+  computeAll();
 }
 
-// Safe numeric read with fallback
-function n(id,fb=1) { const v=parseFloat(document.getElementById(id).value); return isNaN(v)?fb:v; }
+// ─── SEARCH ──────────────────────────────────────────────────────────────────
+async function searchLocation() {
+  const q=document.getElementById('searchInput').value.trim();
+  if(!q) return;
+  try {
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`,
+      {headers:{'Accept-Language':'en'}});
+    const d=await r.json();
+    if(d.length){ map.setView([+d[0].lat,+d[0].lon],18); }
+    else { alert('Location not found. Try a more specific address.'); }
+  } catch { alert('Search failed — check your connection.'); }
+}
+
+function locateMe() {
+  map.locate({setView:true,maxZoom:18});
+  map.once('locationerror', ()=>alert('Could not get location.'));
+}
+
+// ─── MAP OVERLAYS ─────────────────────────────────────────────────────────────
+// Returns [[lat,lng],[lat,lng]] pairs for each grid row
+function getGridLines(pts, angleDeg) {
+  if(pts.length<3) return [];
+  const c=centroid(pts), alt=n('a_alt',40), buf=n('a_buffer',15);
+  const sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
+  const {fw}=footprint(alt), rowSpacing=fw*(1-sideOv);
+  if(rowSpacing<=0) return [];
+  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
+  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
+  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
+  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
+  const lines=[];
+  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing){
+    const s=fromLocal(px*p+dx*minD,py*p+dy*minD,c.lat,c.lng);
+    const e=fromLocal(px*p+dx*maxD,py*p+dy*maxD,c.lat,c.lng);
+    lines.push([[s.lat,s.lng],[e.lat,e.lng]]);
+  }
+  return lines;
+}
+
+// Returns [[lat,lng],...] for orbit circle
+function getOrbitPoints(pts, dir) {
+  if(pts.length<3) return [];
+  const c=centroid(pts), radius=n('b_radius',30);
+  const nPts=Math.max(4,Math.round(n('b_points',24))), startBrg=n('b_startBearing',0), isCCW=dir==='ccw';
+  const coords=[];
+  for(let i=0;i<=nPts;i++){
+    const frac=(i%nPts)/nPts, angle=frac*2*Math.PI*(isCCW?-1:1)+startBrg*D2R;
+    const pt=fromLocal(Math.sin(angle)*radius,Math.cos(angle)*radius,c.lat,c.lng);
+    coords.push([pt.lat,pt.lng]);
+  }
+  return coords;
+}
+
+function updateMapOverlays() {
+  // Clear all overlay layers
+  Object.keys(_ov).forEach(k=>{ if(_ov[k]){ map.removeLayer(_ov[k]); _ov[k]=null; } });
+
+  const pts=parsePoly();
+  if(pts.length<3) return;
+
+  const polyOpts={interactive:false};
+  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
+
+  // Grid 1 (brighter)
+  const g1=getGridLines(pts,d1);
+  if(g1.length) {
+    _ov.grid1=L.layerGroup(g1.map(ll=>L.polyline(ll,{...polyOpts,color:'#4f9ef8',opacity:0.45,weight:1}))).addTo(map);
+  }
+
+  // Grid 2 (dimmer)
+  const g2=getGridLines(pts,d2);
+  if(g2.length) {
+    _ov.grid2=L.layerGroup(g2.map(ll=>L.polyline(ll,{...polyOpts,color:'#4f9ef8',opacity:0.22,weight:1}))).addTo(map);
+  }
+
+  // Orbit CW
+  const oCW=getOrbitPoints(pts,'cw');
+  if(oCW.length) _ov.orbitCW=L.polyline(oCW,{...polyOpts,color:'#3fcf8e',opacity:0.6,weight:2}).addTo(map);
+
+  // Orbit CCW (dashed)
+  const oCCW=getOrbitPoints(pts,'ccw');
+  if(oCCW.length) _ov.orbitCCW=L.polyline(oCCW,{...polyOpts,color:'#3fcf8e',opacity:0.35,weight:1.5,dashArray:'6 4'}).addTo(map);
+
+  // Perimeter inset (dashed orange)
+  const inset=insetPoly(pts,n('c_offset',8));
+  if(inset.length>=3) {
+    _ov.perim=L.polygon(inset.map(p=>[p.lat,p.lng]),
+      {...polyOpts,color:'#f59e0b',fill:false,opacity:0.55,weight:1.5,dashArray:'5 4'}).addTo(map);
+  }
+}
 
 // ─── MISSION A: GRID ─────────────────────────────────────────────────────────
 function buildGrid(pts, angleDeg) {
-  if (pts.length<3) return [];
-  const c       = centroid(pts);
-  const alt     = n('a_alt',40);
-  const speed   = Math.max(0.1,n('a_speed',3));
-  const ival    = n('a_interval',2);
-  const sideOv  = Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
-  const pitch   = n('a_pitch',-80);
-  const buf     = n('a_buffer',15);
-  const {fw}    = footprint(alt);
-  const rowSpacing = fw*(1-sideOv);
-  if (rowSpacing<=0) return [];
-
-  // Flying direction bearing θ in East-North local coords: dir=(sinθ,cosθ), perp=(cosθ,−sinθ)
-  const θ = angleDeg*D2R;
-  const dx=Math.sin(θ), dy=Math.cos(θ);
-  const px=Math.cos(θ), py=-Math.sin(θ);
-
-  const local = pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
-  const projD = local.map(l=>l.x*dx+l.y*dy);
-  const projP = local.map(l=>l.x*px+l.y*py);
+  if(pts.length<3) return [];
+  const c=centroid(pts), alt=n('a_alt',40), speed=Math.max(0.1,n('a_speed',3));
+  const ival=n('a_interval',2), sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
+  const pitch=n('a_pitch',-80), buf=n('a_buffer',15), {fw}=footprint(alt);
+  const rowSpacing=fw*(1-sideOv);
+  if(rowSpacing<=0) return [];
+  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
+  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
   const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
   const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
-
-  const rows=[];
-  let fwd=true;
-  for (let p=minP; p<=maxP+rowSpacing*0.5; p+=rowSpacing) {
+  const rows=[]; let fwd=true;
+  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing){
     const sD=fwd?minD:maxD, eD=fwd?maxD:minD;
-    const s=fromLocal(px*p+dx*sD, py*p+dy*sD, c.lat,c.lng);
-    const e=fromLocal(px*p+dx*eD, py*p+dy*eD, c.lat,c.lng);
+    const s=fromLocal(px*p+dx*sD,py*p+dy*sD,c.lat,c.lng);
+    const e=fromLocal(px*p+dx*eD,py*p+dy*eD,c.lat,c.lng);
     const hdg=fwd?angleDeg%360:(angleDeg+180)%360;
     rows.push(wp({lat:s.lat,lng:s.lng,alt,hdg,pitch,speed,interval:ival}));
     rows.push(wp({lat:e.lat,lng:e.lng,alt,hdg,pitch,speed,interval:-1}));
@@ -409,147 +579,101 @@ function buildGrid(pts, angleDeg) {
 }
 
 function computeA() {
-  const startDir = n('a_startDir',0);
-  const crossOff = n('a_crossDir',90);
-  const dir2 = (startDir+crossOff)%360;
-  document.getElementById('btn_a1').textContent = `↓ Mission A — Grid ${startDir}°`;
-  document.getElementById('btn_a2').textContent = `↓ Mission A — Grid ${dir2}°`;
-
-  const pts = parsePoly();
-  if (pts.length<3) { document.getElementById('a_stats').innerHTML='—'; return; }
-
-  const alt    = n('a_alt',40);
-  const speed  = Math.max(0.1,n('a_speed',3));
-  const ival   = n('a_interval',2);
-  const sideOv = Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
-  const {fw,fh}= footprint(alt);
-  const rowSpacing = fw*(1-sideOv);
-  const photoSpacing = speed*ival;
-  const frontOv = rowSpacing>0 ? Math.round((fh-photoSpacing)/fh*100) : 0;
-  const r0=buildGrid(pts,startDir), r1=buildGrid(pts,dir2);
+  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
+  document.getElementById('btn_a1').textContent=`↓ Mission A — Grid ${d1}°`;
+  document.getElementById('btn_a2').textContent=`↓ Mission A — Grid ${d2}°`;
+  const pts=parsePoly();
+  if(pts.length<3){document.getElementById('a_stats').innerHTML='—';return;}
+  const alt=n('a_alt',40), speed=Math.max(0.1,n('a_speed',3)), ival=n('a_interval',2);
+  const sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
+  const {fw,fh}=footprint(alt), rowSpacing=fw*(1-sideOv), photoSpacing=speed*ival;
+  const frontOv=rowSpacing>0?Math.round((fh-photoSpacing)/fh*100):0;
+  const r0=buildGrid(pts,d1), r1=buildGrid(pts,d2);
   const w0=r0.length, w1=r1.length;
-  const estTime = rowSpacing>0&&speed>0 ? Math.round(polyArea(pts)/(rowSpacing*speed)/60) : '?';
-
-  document.getElementById('a_stats').innerHTML =
+  const t=rowSpacing>0&&speed>0?Math.round(polyArea(pts)/(rowSpacing*speed)/60):'?';
+  document.getElementById('a_stats').innerHTML=
     `Footprint <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)} m</span> · `+
     `Row spacing <span class="sv">${rowSpacing.toFixed(1)} m</span> · `+
     `Photo every <span class="sv">${photoSpacing.toFixed(1)} m</span> · `+
     `Front overlap <span class="sv${frontOv<70?' warn':''}">~${frontOv}%</span> · `+
-    `Grid ${startDir}°: <span class="sv${w0>99?' warn':''}">${w0} WP${w0>99?' ⚠>99':''}</span> · `+
-    `Grid ${dir2}°: <span class="sv${w1>99?' warn':''}">${w1} WP${w1>99?' ⚠>99':''}</span> · `+
-    `Est. <span class="sv">~${estTime} min</span>/grid`;
-
-  document.getElementById('fovStats').innerHTML =
-    `@${alt}m: <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)}m</span>`;
+    `Grid ${d1}°: <span class="sv${w0>99?' warn':''}">${w0} WP${w0>99?' ⚠>99':''}</span> · `+
+    `Grid ${d2}°: <span class="sv${w1>99?' warn':''}">${w1} WP${w1>99?' ⚠>99':''}</span> · `+
+    `Est. <span class="sv">~${t} min</span>/grid`;
+  document.getElementById('fovStats').innerHTML=`@${alt}m: <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)}m</span>`;
 }
 
-function downloadA()  {
-  const d=n('a_startDir',0);
-  doDownload(buildGrid(parsePoly(),d), `mission_A_grid_${d}deg.csv`, 'a_dlcount', `Grid ${d}°`);
-}
-function downloadA2() {
-  const d=(n('a_startDir',0)+n('a_crossDir',90))%360;
-  doDownload(buildGrid(parsePoly(),d), `mission_A_grid_${d}deg.csv`, 'a_dlcount', `Grid ${d}°`);
-}
+function downloadA(){const d=n('a_startDir',0);doDownload(buildGrid(parsePoly(),d),`mission_A_grid_${d}deg.csv`,'a_dlcount',`Grid ${d}°`);}
+function downloadA2(){const d=(n('a_startDir',0)+n('a_crossDir',90))%360;doDownload(buildGrid(parsePoly(),d),`mission_A_grid_${d}deg.csv`,'a_dlcount',`Grid ${d}°`);}
 
 // ─── MISSION B: ORBIT ────────────────────────────────────────────────────────
 function buildOrbit(pts, dir, altOverride) {
-  if (pts.length<3) return [];
-  const c          = centroid(pts);
-  const alt        = altOverride ?? n('b_alt',20);
-  const radius     = n('b_radius',30);
-  const speed      = Math.max(0.1,n('b_speed',2));
-  const pitch      = n('b_pitch',-35);
-  const nPts       = Math.max(4,Math.round(n('b_points',24)));
-  const ival       = n('b_interval',2);
-  const startBrg   = n('b_startBearing',0);
-  const isCCW      = dir==='ccw';
+  if(pts.length<3) return [];
+  const c=centroid(pts), alt=altOverride??n('b_alt',20), radius=n('b_radius',30);
+  const speed=Math.max(0.1,n('b_speed',2)), pitch=n('b_pitch',-35);
+  const nPts=Math.max(4,Math.round(n('b_points',24))), ival=n('b_interval',2);
+  const startBrg=n('b_startBearing',0), isCCW=dir==='ccw';
   const rows=[];
-  for (let i=0; i<=nPts; i++) {
-    const frac  = (i%nPts)/nPts;
-    const angle = frac*2*Math.PI*(isCCW?-1:1) + startBrg*D2R;
-    const pt    = fromLocal(Math.sin(angle)*radius, Math.cos(angle)*radius, c.lat,c.lng);
-    const hdg   = bearing(pt.lat,pt.lng,c.lat,c.lng); // face center
-    rows.push(wp({lat:pt.lat,lng:pt.lng,alt,hdg,pitch,speed,interval:ival}));
+  for(let i=0;i<=nPts;i++){
+    const frac=(i%nPts)/nPts, angle=frac*2*Math.PI*(isCCW?-1:1)+startBrg*D2R;
+    const pt=fromLocal(Math.sin(angle)*radius,Math.cos(angle)*radius,c.lat,c.lng);
+    rows.push(wp({lat:pt.lat,lng:pt.lng,alt,hdg:bearing(pt.lat,pt.lng,c.lat,c.lng),pitch,speed,interval:ival}));
   }
   return rows;
 }
 
 function computeB() {
-  const pts    = parsePoly();
-  const radius = n('b_radius',30);
-  const speed  = Math.max(0.1,n('b_speed',2));
-  const nPts   = Math.max(4,Math.round(n('b_points',24)));
-  const ival   = n('b_interval',2);
-  const circ   = 2*Math.PI*radius;
-  const photoSpacing = speed*ival;
-  const wpCount = nPts+1;
-
-  let s = `Circumference <span class="sv">${circ.toFixed(0)} m</span> · `+
-    `Photo every <span class="sv">${photoSpacing.toFixed(1)} m</span> · `+
+  const pts=parsePoly(), radius=n('b_radius',30), speed=Math.max(0.1,n('b_speed',2));
+  const nPts=Math.max(4,Math.round(n('b_points',24))), ival=n('b_interval',2);
+  const circ=2*Math.PI*radius, wpCount=nPts+1;
+  let s=`Circumference <span class="sv">${circ.toFixed(0)} m</span> · `+
+    `Photo every <span class="sv">${(speed*ival).toFixed(1)} m</span> · `+
     `WP spacing ${(circ/nPts).toFixed(1)} m · `+
     `<span class="sv${wpCount>99?' warn':''}">${wpCount} WP/orbit${wpCount>99?' ⚠>99':''}</span>`;
-
-  if (pts.length>=3) {
+  if(pts.length>=3){
     const c=centroid(pts), maxR=maxRadius(pts,c);
-    s += ` · Site max radius <span class="sv">${maxR.toFixed(0)} m</span>`;
-    if (radius<maxR) s += ` · <span class="warn">⚠ Radius < site extent — fly inside. Recommend ≥${Math.ceil(maxR+10)} m</span>`;
+    s+=` · Site max radius <span class="sv">${maxR.toFixed(0)} m</span>`;
+    if(radius<maxR) s+=` · <span class="warn">⚠ Radius < site extent. Recommend ≥${Math.ceil(maxR+10)} m</span>`;
   }
   document.getElementById('b_stats').innerHTML=s;
 }
 
-function downloadB(dir) {
-  const alt2 = dir==='ccw' ? n('b_alt2',15) : undefined;
-  doDownload(buildOrbit(parsePoly(),dir,alt2), `mission_B_orbit_${dir.toUpperCase()}.csv`, 'b_dlcount', `Orbit ${dir.toUpperCase()}`);
+function downloadB(dir){
+  const alt2=dir==='ccw'?n('b_alt2',15):undefined;
+  doDownload(buildOrbit(parsePoly(),dir,alt2),`mission_B_orbit_${dir.toUpperCase()}.csv`,'b_dlcount',`Orbit ${dir.toUpperCase()}`);
 }
 
 // ─── MISSION C: PERIMETER ────────────────────────────────────────────────────
-// Miter-based polygon inset — maintains constant offset from each edge (not radial scaling)
 function insetPoly(pts, insetM) {
-  if (insetM<=0) return [...pts];
+  if(insetM<=0) return [...pts];
   const c=centroid(pts), n_=pts.length;
   const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
-  const isCCW = signedArea2(local)>0; // CCW: right-hand normal is inward
-  const sign = isCCW?1:-1;
+  const sign=signedArea2(local)>0?1:-1; // CCW→1, CW→-1; inward normal sign
   const result=[];
-  for (let i=0; i<n_; i++) {
-    const p=local[(i-1+n_)%n_], q=local[i], r=local[(i+1)%n_];
-    const ex1=q.x-p.x, ey1=q.y-p.y, l1=Math.hypot(ex1,ey1);
-    const ex2=r.x-q.x, ey2=r.y-q.y, l2=Math.hypot(ex2,ey2);
-    if (l1<0.001||l2<0.001) { result.push(fromLocal(q.x,q.y,c.lat,c.lng)); continue; }
-    // Inward unit normals
-    const nx1=sign*ey1/l1, ny1=-sign*ex1/l1;
-    const nx2=sign*ey2/l2, ny2=-sign*ex2/l2;
-    // Bisector of the two inward normals
-    const bx=nx1+nx2, by=ny1+ny2, bl=Math.hypot(bx,by);
+  for(let i=0;i<n_;i++){
+    const p=local[(i-1+n_)%n_],q=local[i],r=local[(i+1)%n_];
+    const ex1=q.x-p.x,ey1=q.y-p.y,l1=Math.hypot(ex1,ey1);
+    const ex2=r.x-q.x,ey2=r.y-q.y,l2=Math.hypot(ex2,ey2);
+    if(l1<0.001||l2<0.001){result.push(fromLocal(q.x,q.y,c.lat,c.lng));continue;}
+    const nx1=sign*ey1/l1,ny1=-sign*ex1/l1, nx2=sign*ey2/l2,ny2=-sign*ex2/l2;
+    const bx=nx1+nx2,by=ny1+ny2,bl=Math.hypot(bx,by);
     let ox,oy;
-    if (bl<0.001) { ox=nx1*insetM; oy=ny1*insetM; }
-    else {
-      const bux=bx/bl, buy=by/bl;
-      const cosA=nx1*bux+ny1*buy;
-      // Cap miter at 4× to avoid explosion at very sharp corners
-      const miterLen=cosA>0.25?insetM/cosA:insetM*4;
-      ox=bux*miterLen; oy=buy*miterLen;
-    }
+    if(bl<0.001){ox=nx1*insetM;oy=ny1*insetM;}
+    else{const bux=bx/bl,buy=by/bl,cosA=nx1*bux+ny1*buy,m=cosA>0.25?insetM/cosA:insetM*4;ox=bux*m;oy=buy*m;}
     result.push(fromLocal(q.x+ox,q.y+oy,c.lat,c.lng));
   }
   return result;
 }
 
 function buildPerimeter(pts, altOvr, pitchOvr) {
-  if (pts.length<3) return [];
-  const alt   = altOvr  ?? n('c_alt',12);
-  const speed = Math.max(0.1,n('c_speed',1.5));
-  const pitch = pitchOvr ?? n('c_pitch',-25);
-  const ival  = n('c_interval',2);
-  const offset= n('c_offset',8);
-  const inset = insetPoly(pts,offset);
-  const rows=[];
-  for (let i=0; i<inset.length; i++) {
-    const pt=inset[i], nx=inset[(i+1)%inset.length];
+  if(pts.length<3) return [];
+  const alt=altOvr??n('c_alt',12), speed=Math.max(0.1,n('c_speed',1.5));
+  const pitch=pitchOvr??n('c_pitch',-25), ival=n('c_interval',2), offset=n('c_offset',8);
+  const inset=insetPoly(pts,offset), rows=[];
+  for(let i=0;i<inset.length;i++){
+    const pt=inset[i],nx=inset[(i+1)%inset.length];
     rows.push(wp({lat:pt.lat,lng:pt.lng,alt,hdg:bearing(pt.lat,pt.lng,nx.lat,nx.lng),pitch,speed,interval:ival}));
   }
-  rows.push(rows[0]); // close loop
+  rows.push(rows[0]);
   return rows;
 }
 
@@ -557,10 +681,8 @@ function computeC() {
   const passes=n('c_passes',1);
   document.getElementById('c_pass2btn').style.display=passes>1?'inline-flex':'none';
   const pts=parsePoly();
-  if (pts.length<3) { document.getElementById('c_stats').innerHTML='—'; return; }
-  const perim =polyPerimeter(pts);
-  const speed =Math.max(0.1,n('c_speed',1.5));
-  const ival  =n('c_interval',2);
+  if(pts.length<3){document.getElementById('c_stats').innerHTML='—';return;}
+  const perim=polyPerimeter(pts), speed=Math.max(0.1,n('c_speed',1.5)), ival=n('c_interval',2);
   const wpCount=pts.length+1;
   document.getElementById('c_stats').innerHTML=
     `Perimeter <span class="sv">${perim.toFixed(0)} m</span> · `+
@@ -570,179 +692,84 @@ function computeC() {
     `Est. <span class="sv">~${Math.round(perim/speed/60)} min</span>/pass`;
 }
 
-function downloadC(pass) {
+function downloadC(pass){
   const pts=parsePoly();
   pass===2
-    ? doDownload(buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv','c_dlcount','Pass 2')
-    : doDownload(buildPerimeter(pts),'mission_C_pass1.csv','c_dlcount','Pass 1');
+    ?doDownload(buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv','c_dlcount','Pass 2')
+    :doDownload(buildPerimeter(pts),'mission_C_pass1.csv','c_dlcount','Pass 1');
 }
 
 // ─── DOWNLOAD ALL ────────────────────────────────────────────────────────────
-function downloadAll() {
+function downloadAll(){
   const pts=parsePoly();
-  if (pts.length<3) { alert('Enter at least 3 polygon corners first.'); return; }
-  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
+  if(pts.length<3){alert('Draw a polygon on the map first.');return;}
+  const d1=n('a_startDir',0),d2=(d1+n('a_crossDir',90))%360;
   const files=[
-    [buildGrid(pts,d1),  `mission_A_grid_${d1}deg.csv`],
-    [buildGrid(pts,d2),  `mission_A_grid_${d2}deg.csv`],
-    [buildOrbit(pts,'cw'),               'mission_B_orbit_CW.csv'],
+    [buildGrid(pts,d1),`mission_A_grid_${d1}deg.csv`],
+    [buildGrid(pts,d2),`mission_A_grid_${d2}deg.csv`],
+    [buildOrbit(pts,'cw'),'mission_B_orbit_CW.csv'],
     [buildOrbit(pts,'ccw',n('b_alt2',15)),'mission_B_orbit_CCW.csv'],
-    [buildPerimeter(pts),                 'mission_C_pass1.csv'],
+    [buildPerimeter(pts),'mission_C_pass1.csv'],
   ];
-  if (n('c_passes',1)>1)
-    files.push([buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv']);
+  if(n('c_passes',1)>1) files.push([buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv']);
   files.forEach(([rows,name],i)=>setTimeout(()=>triggerDownload(makeCSV(rows),name),i*300));
 }
 
-function doDownload(rows,filename,countId,label) {
-  if (parsePoly().length<3) { alert('Enter at least 3 polygon corners first.'); return; }
-  if (!rows.length) { alert('No waypoints generated — check settings.'); return; }
+function doDownload(rows,filename,countId,label){
+  if(parsePoly().length<3){alert('Draw a polygon on the map first.');return;}
+  if(!rows.length){alert('No waypoints generated — check settings.');return;}
   triggerDownload(makeCSV(rows),filename);
   const el=document.getElementById(countId);
   el.textContent=`✓ ${label} — ${rows.length} WP`;
   setTimeout(()=>{el.textContent='';},4000);
 }
 
-function triggerDownload(content,filename) {
+function triggerDownload(content,filename){
   const a=Object.assign(document.createElement('a'),{
-    href:URL.createObjectURL(new Blob([content],{type:'text/csv'})), download:filename
+    href:URL.createObjectURL(new Blob([content],{type:'text/csv'})),download:filename
   });
-  a.click(); URL.revokeObjectURL(a.href);
+  a.click();URL.revokeObjectURL(a.href);
 }
 
-// ─── PREVIEW CANVAS ──────────────────────────────────────────────────────────
-// scheduleUpdate debounces polygon textarea input
-let _timer;
-function scheduleUpdate() { clearTimeout(_timer); _timer=setTimeout(computeAll,600); }
-
-// updatePreview draws the canvas — does NOT call computeAll (would recurse)
-function updatePreview() {
-  const canvas=document.getElementById('preview');
-  // Set pixel buffer to match CSS display size (fixes blurry canvas)
-  canvas.width  = Math.round(canvas.getBoundingClientRect().width)||860;
-  canvas.height = 220;
-  const ctx=canvas.getContext('2d');
-  const W=canvas.width, H=canvas.height;
-  ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#1d2030'; ctx.fillRect(0,0,W,H);
-
-  const pts=parsePoly();
-  if (pts.length<2) {
-    ctx.fillStyle='#5a6480'; ctx.font='13px system-ui'; ctx.textAlign='center';
-    ctx.fillText('Enter coordinates to preview',W/2,H/2);
-    updateAreaStats(null); return;
-  }
-
-  const b={
-    minLat:Math.min(...pts.map(p=>p.lat)), maxLat:Math.max(...pts.map(p=>p.lat)),
-    minLng:Math.min(...pts.map(p=>p.lng)), maxLng:Math.max(...pts.map(p=>p.lng))
-  };
-  const pad=32;
-  const dLat=b.maxLat-b.minLat||0.0001, dLng=b.maxLng-b.minLng||0.0001;
-  const scale=Math.min((W-pad*2)/dLng,(H-pad*2)/dLat);
-  const cx=W/2, cy=H/2;
-  const midLat=(b.minLat+b.maxLat)/2, midLng=(b.minLng+b.maxLng)/2;
-  const toC=(lat,lng)=>({x:cx+(lng-midLng)*scale, y:cy-(lat-midLat)*scale});
-
-  // Grid preview lines (both directions)
-  if (pts.length>=3) {
-    const alt=n('a_alt',40), sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
-    const {fw}=footprint(alt); const rowSpacing=fw*(1-sideOv);
-    const buf=n('a_buffer',15);
-    const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
-    const c2=centroid(pts);
-    [d1,d2].forEach((dir,di)=>{
-      ctx.strokeStyle=di===0?'rgba(79,158,248,0.18)':'rgba(79,158,248,0.09)';
-      ctx.lineWidth=1;
-      const θ=dir*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
-      const local=pts.map(p=>toLocal(p.lat,p.lng,c2.lat,c2.lng));
-      const pP=local.map(l=>l.x*px+l.y*py), pD=local.map(l=>l.x*dx+l.y*dy);
-      const minP=Math.min(...pP)-buf, maxP=Math.max(...pP)+buf;
-      const minD=Math.min(...pD)-buf, maxD=Math.max(...pD)+buf;
-      if (rowSpacing>0) for (let p=minP;p<=maxP;p+=rowSpacing) {
-        const s=fromLocal(px*p+dx*minD,py*p+dy*minD,c2.lat,c2.lng);
-        const e=fromLocal(px*p+dx*maxD,py*p+dy*maxD,c2.lat,c2.lng);
-        const cs=toC(s.lat,s.lng), ce=toC(e.lat,e.lng);
-        ctx.beginPath(); ctx.moveTo(cs.x,cs.y); ctx.lineTo(ce.x,ce.y); ctx.stroke();
-      }
-    });
-  }
-
-  // Orbit radius ring
-  if (pts.length>=3) {
-    const c2=centroid(pts), radius=n('b_radius',30);
-    const rc=toC(c2.lat,c2.lng), rPx=radius/mPerDegLng(c2.lat)*scale;
-    ctx.beginPath(); ctx.arc(rc.x,rc.y,rPx,0,Math.PI*2);
-    ctx.strokeStyle='rgba(63,207,142,0.3)'; ctx.lineWidth=1.5; ctx.stroke();
-  }
-
-  // Polygon
-  ctx.beginPath();
-  pts.forEach((p,i)=>{const{x,y}=toC(p.lat,p.lng);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
-  ctx.closePath();
-  ctx.fillStyle='rgba(79,158,248,0.1)'; ctx.fill();
-  ctx.strokeStyle='#4f9ef8'; ctx.lineWidth=2; ctx.stroke();
-
-  // Vertices
-  ctx.font='10px system-ui';
-  pts.forEach((p,i)=>{
-    const{x,y}=toC(p.lat,p.lng);
-    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
-    ctx.fillStyle='#4f9ef8'; ctx.fill();
-    ctx.fillStyle='#fff'; ctx.textAlign='center';
-    ctx.fillText(i+1,x,y-8);
-  });
-
-  // Centroid dot
-  if (pts.length>=3) {
-    const{x,y}=toC(centroid(pts).lat,centroid(pts).lng);
-    ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2);
-    ctx.strokeStyle='#3fcf8e'; ctx.lineWidth=2; ctx.stroke();
-  }
-
-  // Area label overlay
-  if (pts.length>=3) {
-    const area=polyArea(pts);
-    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(8,8,195,20);
-    ctx.fillStyle='#dce4f0'; ctx.font='11px system-ui'; ctx.textAlign='left';
-    ctx.fillText(`${(area/10000).toFixed(4)} ha  (${area.toFixed(0)} m²)`,12,22);
-  }
-
-  updateAreaStats(pts);
-  // ⚠ Do NOT call computeAll() here — infinite recursion
-}
-
-function updateAreaStats(pts) {
+// ─── AREA STATS ──────────────────────────────────────────────────────────────
+function updateAreaStats(pts){
   const el=document.getElementById('areaStats');
-  if (!pts||pts.length<3) { el.innerHTML='Enter polygon coordinates above to see site stats.'; return; }
+  if(!pts||pts.length<3){el.innerHTML='Draw a polygon on the map to see site stats.';return;}
   const c=centroid(pts);
-  el.innerHTML=
-    `Area <span class="sv">${(polyArea(pts)/10000).toFixed(4)} ha</span> · `+
+  el.innerHTML=`Area <span class="sv">${(polyArea(pts)/10000).toFixed(4)} ha</span> · `+
     `Perimeter <span class="sv">${polyPerimeter(pts).toFixed(0)} m</span> · `+
     `Max radius <span class="sv">${maxRadius(pts,c).toFixed(0)} m</span> · `+
     `Centre <span class="sv">${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}</span> · `+
     `Vertices <span class="sv">${pts.length}</span>`;
 }
 
-// ─── COMPUTE ALL (no recursion with updatePreview) ────────────────────────────
-function computeAll() {
-  updatePreview(); // canvas + area stats (does NOT call back to computeAll)
-  computeA();
-  computeB();
-  computeC();
+// ─── COMPUTE ALL ─────────────────────────────────────────────────────────────
+function computeAll(){
+  const pts=parsePoly();
+  updateAreaStats(pts);
+  computeA(); computeB(); computeC();
+  updateMapOverlays();
 }
 
-// ─── EXAMPLE ─────────────────────────────────────────────────────────────────
-function loadExample() {
-  document.getElementById('polygon').value=
-`-31.950200, 115.860200
--31.950200, 115.861500
--31.951200, 115.861500
--31.951200, 115.860200`;
-  computeAll();
+// ─── DEBOUNCED TEXTAREA SYNC ─────────────────────────────────────────────────
+let _timer;
+function scheduleUpdate(){
+  clearTimeout(_timer);
+  _timer=setTimeout(()=>{ syncToMap(parsePoly()); computeAll(); },600);
+}
+
+// ─── EXAMPLE SITE ────────────────────────────────────────────────────────────
+function loadExample(){
+  syncToMap([
+    {lat:-31.9502,lng:115.8602},{lat:-31.9502,lng:115.8615},
+    {lat:-31.9512,lng:115.8615},{lat:-31.9512,lng:115.8602}
+  ]);
+  // syncToMap updates the layer, fire syncFromLayer to get textarea updated
+  if(_pmLayer) syncFromLayer(); else computeAll();
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
+initMap();
 computeAll();
 </script>
 </body>
