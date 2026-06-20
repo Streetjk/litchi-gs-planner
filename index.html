@@ -6,6 +6,7 @@
 <title>Litchi GS Mission Planner</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.css"/>
 <style>
 :root {
   --bg:#0d0f18;--surface:#141720;--surface2:#1d2030;--surface3:#252840;
@@ -85,6 +86,18 @@ details summary:hover { color: var(--accent); }
 
 /* Geoman toolbar dark-bg map — keep light since OSM tiles are light */
 .leaflet-pm-toolbar .button-container button { border-radius: 4px !important; }
+
+/* Custom map controls (satellite, freehand) */
+.map-ctrl a {
+  font-size: 16px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 30px !important;
+  height: 30px !important;
+  text-decoration: none !important;
+}
+.map-ctrl a.ctrl-active { background: #e0f0ff !important; }
 </style>
 </head>
 <body>
@@ -105,8 +118,6 @@ details summary:hover { color: var(--accent); }
     <input type="text" id="searchInput" placeholder="Search address or place name…" onkeydown="if(event.key==='Enter')searchLocation()">
     <button class="btn btn-ghost btn-sm" onclick="searchLocation()">Search</button>
     <button class="btn btn-ghost btn-sm" onclick="locateMe()" title="Centre on my GPS location">📍 My location</button>
-    <button id="btn_satellite" class="btn btn-ghost btn-sm" onclick="toggleSatellite()" title="Switch between map and satellite imagery">🛰 Satellite</button>
-    <button id="btn_freehand" class="btn btn-ghost btn-sm" onclick="toggleFreehand()" title="Hold mouse button and drag to trace your site boundary">✏️ Freehand</button>
     <button class="btn btn-ghost btn-sm" onclick="clearPolygon()">✕ Clear</button>
     <button class="btn btn-ghost btn-sm" onclick="loadExample()">Load example</button>
   </div>
@@ -298,9 +309,10 @@ details summary:hover { color: var(--accent); }
   </div>
 </div>
 
-<!-- Leaflet + Geoman JS (after DOM) -->
+<!-- Leaflet + Geoman + Rotate JS (after DOM) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
 <script>
 // ─── LITCHI CSV ──────────────────────────────────────────────────────────────
 const HEADER = [
@@ -395,10 +407,11 @@ let _fhActive=false, _fhPts=[], _fhPreview=null;
 
 function toggleFreehand(){
   _fhActive=!_fhActive;
-  const btn=document.getElementById('btn_freehand');
-  btn.textContent=_fhActive?'⏹ Stop drawing':'✏️ Freehand';
-  btn.style.borderColor=_fhActive?'var(--accent)':'';
-  btn.style.color=_fhActive?'var(--accent)':'';
+  if(_fhBtn){
+    _fhBtn.textContent=_fhActive?'⏹':'✏️';
+    _fhBtn.title=_fhActive?'Click to cancel freehand draw':'Freehand draw — drag to trace site boundary';
+    if(_fhActive) _fhBtn.classList.add('ctrl-active'); else _fhBtn.classList.remove('ctrl-active');
+  }
   if(_fhActive){
     map.pm.disableDraw(); // cancel any active Geoman tool
     map.dragging.disable();
@@ -437,10 +450,7 @@ function fhEnd(){
   _fhPts=[];
   // Auto-deactivate
   _fhActive=false;
-  const btn=document.getElementById('btn_freehand');
-  btn.textContent='✏️ Freehand';
-  btn.style.borderColor='';
-  btn.style.color='';
+  if(_fhBtn){ _fhBtn.textContent='✏️'; _fhBtn.classList.remove('ctrl-active'); }
   _fhCleanup();
 }
 
@@ -471,31 +481,64 @@ function dpSimplify(pts,tol){
 }
 
 // ─── MAP ─────────────────────────────────────────────────────────────────────
-let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false;
+let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false, _satBtn=null, _fhBtn=null;
 const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null};
 
 function toggleSatellite(){
   _satActive=!_satActive;
-  const btn=document.getElementById('btn_satellite');
   if(_satActive){
     map.removeLayer(_tileOSM);
     _tileSat.addTo(map);
-    // Move satellite below overlays
     _tileSat.bringToBack();
-    btn.textContent='🗺 Map';
-    btn.style.borderColor='var(--green)';
-    btn.style.color='var(--green)';
+    if(_satBtn){ _satBtn.title='Switch to map'; _satBtn.textContent='🗺'; _satBtn.classList.add('ctrl-active'); }
   } else {
     map.removeLayer(_tileSat);
     _tileOSM.addTo(map);
-    btn.textContent='🛰 Satellite';
-    btn.style.borderColor='';
-    btn.style.color='';
+    if(_satBtn){ _satBtn.title='Switch to satellite'; _satBtn.textContent='🛰'; _satBtn.classList.remove('ctrl-active'); }
   }
 }
 
+function addCustomControls() {
+  // Satellite toggle — topright
+  const SatCtrl = L.Control.extend({
+    options:{ position:'topright' },
+    onAdd(){
+      const wrap = L.DomUtil.create('div','leaflet-bar leaflet-control map-ctrl');
+      _satBtn = L.DomUtil.create('a','',wrap);
+      _satBtn.href='#'; _satBtn.textContent='🛰'; _satBtn.title='Switch to satellite';
+      L.DomEvent.disableClickPropagation(wrap);
+      L.DomEvent.on(_satBtn,'click',e=>{ L.DomEvent.preventDefault(e); toggleSatellite(); });
+      return wrap;
+    }
+  });
+
+  // Freehand draw — topright
+  const FhCtrl = L.Control.extend({
+    options:{ position:'topright' },
+    onAdd(){
+      const wrap = L.DomUtil.create('div','leaflet-bar leaflet-control map-ctrl');
+      _fhBtn = L.DomUtil.create('a','',wrap);
+      _fhBtn.href='#'; _fhBtn.textContent='✏️'; _fhBtn.title='Freehand draw — drag to trace site boundary';
+      L.DomEvent.disableClickPropagation(wrap);
+      L.DomEvent.on(_fhBtn,'click',e=>{ L.DomEvent.preventDefault(e); toggleFreehand(); });
+      return wrap;
+    }
+  });
+
+  map.addControl(new SatCtrl());
+  map.addControl(new FhCtrl());
+}
+
 function initMap() {
-  map = L.map('map').setView([-31.9505, 115.8576], 13);
+  map = L.map('map', {
+    rotate: true,
+    touchRotate: true,  // two-finger rotation on mobile/trackpad
+  }).setView([-31.9505, 115.8576], 13);
+
+  // Rotation compass control (from leaflet-rotate — graceful no-op if plugin missing)
+  if(typeof L.Control.Rotate !== 'undefined') {
+    new L.Control.Rotate({ position:'topright', closeOnZeroBearing:false }).addTo(map);
+  }
 
   _tileOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>',
@@ -540,6 +583,8 @@ function initMap() {
   map.on('pm:dragend pm:rotateend', e => {
     if(_pmLayer && e.layer===_pmLayer) syncFromLayer();
   });
+
+  addCustomControls();
 }
 
 function stylePolyLayer(layer) {
