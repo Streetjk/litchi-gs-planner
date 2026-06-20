@@ -98,6 +98,9 @@ details summary:hover { color: var(--accent); }
   text-decoration: none !important;
 }
 .map-ctrl a.ctrl-active { background: #e0f0ff !important; }
+.badge-d{background:rgba(167,139,250,.18);color:#c4b5fd}
+.btn-d{background:#3d2070;color:#c4b5fd}
+.legend-line.centre{width:8px;height:8px;border-radius:50%;display:inline-block;background:#a78bfa}
 </style>
 </head>
 <body>
@@ -132,6 +135,7 @@ details summary:hover { color: var(--accent); }
     <span class="legend-chip" style="opacity:.6"><span class="legend-line grid"></span> Grid B</span>
     <span class="legend-chip"><span class="legend-line orbit"></span> Orbit</span>
     <span class="legend-chip"><span class="legend-line perim"></span> Perimeter</span>
+    <span class="legend-chip"><span class="legend-line centre"></span> Centre D</span>
   </div>
 
   <!-- Collapsible coordinate import / export -->
@@ -273,7 +277,7 @@ details summary:hover { color: var(--accent); }
     <div class="field"><label>Speed (m/s)</label>
       <input type="number" id="c_speed" value="1.5" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
     <div class="field"><label>Gimbal pitch (°)</label>
-      <input type="number" id="c_pitch" value="-25" min="-60" max="-5" oninput="computeC()"></div>
+      <input type="number" id="c_pitch" value="-25" min="-90" max="-5" oninput="computeC()"></div>
     <div class="field"><label>Photo interval (s)</label>
       <input type="number" id="c_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
     <div class="field"><label>Inset from boundary (m)</label>
@@ -287,13 +291,40 @@ details summary:hover { color: var(--accent); }
     <div class="field"><label>2nd pass altitude (m)</label>
       <input type="number" id="c_alt2" value="6" min="3" max="30" oninput="computeC()"></div>
     <div class="field"><label>2nd pass pitch (°)</label>
-      <input type="number" id="c_pitch2" value="-15" min="-60" max="-5" oninput="computeC()"></div>
+      <input type="number" id="c_pitch2" value="-15" min="-90" max="-5" oninput="computeC()"></div>
   </div>
   <div class="stats-bar" id="c_stats">—</div>
   <div class="btn-row">
     <button class="btn btn-c" onclick="downloadC(1)">↓ Mission C — Pass 1</button>
     <button id="c_pass2btn" class="btn btn-c" onclick="downloadC(2)" style="display:none">↓ Mission C — Pass 2</button>
     <span class="dl-count" id="c_dlcount"></span>
+  </div>
+</div>
+
+<!-- ── MISSION D ──────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-title">
+    <span class="mission-badge badge-d">D</span>
+    <span class="mission-name">Quick Centre</span>
+    <span class="mission-desc">Nadir shots over site centre — fast roof coverage without a full grid</span>
+  </div>
+  <div class="tip" style="margin-bottom:12px">
+    <strong>Tip:</strong> Pair with Mission C at gimbal <code>-85°</code> to <code>-90°</code> for a full nadir site pass in ~10–15 min. One centre point + a ring of shots overhead.
+  </div>
+  <div class="grid4">
+    <div class="field"><label>Altitude AGL (m)</label>
+      <input type="number" id="d_alt" value="80" min="20" max="150" oninput="computeAll()"></div>
+    <div class="field"><label>Ring radius (m)</label>
+      <input type="number" id="d_radius" value="30" min="5" max="300" oninput="computeAll()"></div>
+    <div class="field"><label>Total shots (incl. centre)</label>
+      <input type="number" id="d_shots" value="9" min="2" max="36" oninput="computeD()"></div>
+    <div class="field"><label>Speed (m/s)</label>
+      <input type="number" id="d_speed" value="3" min="0.5" max="10" step="0.5" oninput="computeD()"></div>
+  </div>
+  <div class="stats-bar" id="d_stats">—</div>
+  <div class="btn-row">
+    <button class="btn btn-d" onclick="downloadD()">↓ Mission D — Quick Centre</button>
+    <span class="dl-count" id="d_dlcount"></span>
   </div>
 </div>
 
@@ -493,7 +524,7 @@ function circleToPolygon(center, radiusM, nPts=60) {
 
 // ─── MAP ─────────────────────────────────────────────────────────────────────
 let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false, _satBtn=null, _fhBtn=null;
-const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null};
+const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null,centre:null};
 
 function toggleSatellite(){
   _satActive=!_satActive;
@@ -810,6 +841,14 @@ function updateMapOverlays() {
     _ov.perim=L.polygon(inset.map(p=>[p.lat,p.lng]),
       {...polyOpts,color:'#f59e0b',fill:false,opacity:0.55,weight:1.5,dashArray:'5 4'}).addTo(map);
   }
+
+  // Centre ring (Mission D)
+  const dRadius=n('d_radius',30), ctr=centroid(pts);
+  const ringPts=circleToPolygon(ctr,dRadius,32);
+  _ov.centre=L.layerGroup([
+    L.circleMarker([ctr.lat,ctr.lng],{...polyOpts,radius:5,color:'#a78bfa',fillColor:'#a78bfa',fillOpacity:1,weight:2}),
+    L.polygon(ringPts.map(p=>[p.lat,p.lng]),{...polyOpts,color:'#a78bfa',fill:false,opacity:0.65,weight:1.5,dashArray:'4 3'})
+  ]).addTo(map);
 }
 
 // ─── FLIGHT TIME HELPERS ──────────────────────────────────────────────────────
@@ -991,6 +1030,37 @@ function downloadC(pass){
     :doDownload(buildPerimeter(pts),'mission_C_pass1.csv','c_dlcount','Pass 1');
 }
 
+// ─── MISSION D: QUICK CENTRE ─────────────────────────────────────────────────
+function buildCentre(pts) {
+  if(pts.length<3) return [];
+  const c=centroid(pts), alt=n('d_alt',80), radius=n('d_radius',30);
+  const shots=Math.max(2,Math.round(n('d_shots',9))), speed=Math.max(0.1,n('d_speed',3));
+  const rows=[];
+  // Centre nadir shot first
+  rows.push(wp({lat:c.lat,lng:c.lng,alt,pitch:-90,speed}));
+  // Ring of nadir shots
+  const ring=shots-1;
+  for(let i=0;i<ring;i++){
+    const a=(i/ring)*2*Math.PI;
+    const pt=fromLocal(Math.sin(a)*radius,Math.cos(a)*radius,c.lat,c.lng);
+    rows.push(wp({lat:pt.lat,lng:pt.lng,alt,pitch:-90,speed}));
+  }
+  return rows;
+}
+
+function computeD(){
+  const pts=parsePoly();
+  if(pts.length<3){document.getElementById('d_stats').innerHTML='—';return;}
+  const shots=Math.max(2,Math.round(n('d_shots',9))), radius=n('d_radius',30);
+  const alt=n('d_alt',80), speed=Math.max(0.1,n('d_speed',3));
+  const pathLen=radius+2*Math.PI*radius; // centre→ring + approx ring circumference
+  document.getElementById('d_stats').innerHTML=
+    `<span class="sv">${shots} WP</span> · Ring radius <span class="sv">${radius} m</span> · `+
+    `Alt <span class="sv">${alt} m</span> · Gimbal nadir (−90°) · ~<span class="sv">${fmtTime(pathLen/speed)}</span>`;
+}
+
+function downloadD(){doDownload(buildCentre(parsePoly()),'mission_D_centre.csv','d_dlcount','Centre');}
+
 // ─── DOWNLOAD ALL ────────────────────────────────────────────────────────────
 function downloadAll(){
   const pts=parsePoly();
@@ -1004,6 +1074,7 @@ function downloadAll(){
     [buildPerimeter(pts),'mission_C_pass1.csv'],
   ];
   if(n('c_passes',1)>1) files.push([buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv']);
+  files.push([buildCentre(pts),'mission_D_centre.csv']);
   const zip=new JSZip();
   files.forEach(([rows,name])=>zip.file(name,makeCSV(rows)));
   zip.generateAsync({type:'blob'}).then(blob=>{
@@ -1053,16 +1124,19 @@ function updateTotalTime() {
   const circ=2*Math.PI*n('b_radius',30);
   const passes=n('c_passes',1);
   const insetPerim=polyPerimeter(insetPoly(pts,n('c_offset',8)));
+  const dSpeed=Math.max(0.1,n('d_speed',3)), dRadius=n('d_radius',30);
   const secA=(gridPathLength(pts,d1)+gridPathLength(pts,d2))/aSpeed;
   const secB=circ*2/bSpeed; // CW + CCW
   const secC=insetPerim*passes/cSpeed;
-  const total=secA+secB+secC;
+  const secD=dRadius*(1+2*Math.PI)/dSpeed;
+  const total=secA+secB+secC+secD;
   el.innerHTML=
     `<strong>Total estimated airtime:</strong> `+
     `<span class="sv" style="font-size:14px">${fmtTime(total)}</span> `+
     `&nbsp;·&nbsp; Grid A: <span class="sv">${fmtTime(secA)}</span> `+
     `&nbsp;·&nbsp; Orbit B ×2: <span class="sv">${fmtTime(secB)}</span> `+
-    `&nbsp;·&nbsp; Perimeter C: <span class="sv">${fmtTime(secC)}</span>`+
+    `&nbsp;·&nbsp; Perimeter C: <span class="sv">${fmtTime(secC)}</span> `+
+    `&nbsp;·&nbsp; Centre D: <span class="sv">${fmtTime(secD)}</span>`+
     (total>1800?` &nbsp;·&nbsp; <span class="warn">⚠ >30 min — plan battery swap</span>`:'');
 }
 
@@ -1070,7 +1144,7 @@ function updateTotalTime() {
 function computeAll(){
   const pts=parsePoly();
   updateAreaStats(pts);
-  computeA(); computeB(); computeC();
+  computeA(); computeB(); computeC(); computeD();
   updateTotalTime();
   updateMapOverlays();
 }
