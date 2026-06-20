@@ -149,8 +149,6 @@ details summary:hover { color: var(--accent); }
   <!-- Legend -->
   <div class="map-legend">
     <span>Overlays:</span>
-    <span class="legend-chip"><span class="legend-line grid"></span> Grid A</span>
-    <span class="legend-chip" style="opacity:.6"><span class="legend-line grid"></span> Grid B</span>
     <span class="legend-chip"><span class="legend-line orbit"></span> Orbit</span>
     <span class="legend-chip"><span class="legend-line perim"></span> Perimeter</span>
     <span class="legend-chip"><span class="legend-line centre"></span> Centre D</span>
@@ -169,83 +167,6 @@ details summary:hover { color: var(--accent); }
   </details>
 
   <div class="stats-bar" id="areaStats">Draw a polygon on the map to see site stats.</div>
-</div>
-
-<!-- ── CAMERA ──────────────────────────────────────────────── -->
-<div class="card">
-  <div class="card-title"><h2>2 — Camera Profile</h2></div>
-  <div class="grid4">
-    <div class="field">
-      <label>Drone preset</label>
-      <select id="cameraPreset" onchange="applyCamera()">
-        <option value="mavic1">Mavic Pro 1 — 28 mm</option>
-        <option value="mavic2pro">Mavic 2 Pro — 28 mm</option>
-        <option value="mavic3">Mavic 3 — 24 mm</option>
-        <option value="mini3">Mini 3 Pro</option>
-        <option value="air2s">Air 2S</option>
-        <option value="custom">Custom</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Horizontal FOV (°)</label>
-      <input type="number" id="hFOV" value="78.8" step="0.1" min="30" max="120" oninput="computeAll()">
-    </div>
-    <div class="field">
-      <label>Sensor aspect ratio</label>
-      <select id="aspectRatio" onchange="computeAll()">
-        <option value="1.3333">4:3</option>
-        <option value="1.7778">16:9</option>
-        <option value="1.0">1:1</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>&nbsp;</label>
-      <div class="stats-bar" id="fovStats" style="font-size:11px;padding:6px 10px">—</div>
-    </div>
-  </div>
-</div>
-
-<!-- ── MISSION A ──────────────────────────────────────────────── -->
-<div class="card">
-  <div class="card-title">
-    <span class="mission-badge badge-a">A</span>
-    <span class="mission-name">Overhead Grid</span>
-    <span class="mission-desc">Two grids (0° + 90°) for top-down structure</span>
-  </div>
-  <div class="grid4">
-    <div class="field"><label>Altitude AGL (m)</label>
-      <input type="number" id="a_alt" value="40" min="20" max="120" oninput="computeAll()"></div>
-    <div class="field"><label>Speed (m/s)</label>
-      <input type="number" id="a_speed" value="3" min="0.5" max="10" step="0.5" oninput="computeA()"></div>
-    <div class="field"><label>Photo interval (s)</label>
-      <input type="number" id="a_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeA()"></div>
-    <div class="field"><label>Side overlap (%)</label>
-      <input type="number" id="a_sideOverlap" value="75" min="50" max="90" oninput="computeAll()"></div>
-    <div class="field"><label>Gimbal pitch (°)</label>
-      <input type="number" id="a_pitch" value="-80" min="-90" max="-45" oninput="computeA()"></div>
-    <div class="field"><label>Perimeter buffer (m)</label>
-      <input type="number" id="a_buffer" value="15" min="0" max="80" oninput="computeAll()"></div>
-    <div class="field"><label>Start direction</label>
-      <select id="a_startDir" onchange="computeAll()">
-        <option value="0">0° — N↔S rows</option>
-        <option value="90">90° — E↔W rows</option>
-        <option value="45">45° diagonal</option>
-      </select>
-    </div>
-    <div class="field"><label>Cross-grid offset</label>
-      <select id="a_crossDir" onchange="computeAll()">
-        <option value="90">+90°</option>
-        <option value="45">+45°</option>
-        <option value="60">+60°</option>
-      </select>
-    </div>
-  </div>
-  <div class="stats-bar" id="a_stats">—</div>
-  <div class="btn-row">
-    <button id="btn_a1" class="btn btn-a" onclick="downloadA()">↓ Mission A — Grid 0°</button>
-    <button id="btn_a2" class="btn btn-a" onclick="downloadA2()">↓ Mission A — Grid 90°</button>
-    <span class="dl-count" id="a_dlcount"></span>
-  </div>
 </div>
 
 <!-- ── MISSION B ──────────────────────────────────────────────── -->
@@ -434,24 +355,6 @@ function parsePoly() {
 }
 function n(id,fb=1){const v=parseFloat(document.getElementById(id).value);return isNaN(v)?fb:v;}
 
-// ─── CAMERA ──────────────────────────────────────────────────────────────────
-const CAMERAS = {
-  mavic1:{hFOV:78.8,ar:4/3},mavic2pro:{hFOV:68.9,ar:4/3},mavic3:{hFOV:73.7,ar:4/3},
-  mini3:{hFOV:82.1,ar:4/3},air2s:{hFOV:88.0,ar:4/3},custom:null
-};
-function applyCamera() {
-  const p=CAMERAS[document.getElementById('cameraPreset').value];
-  if(!p)return;
-  document.getElementById('hFOV').value=p.hFOV;
-  document.getElementById('aspectRatio').value=p.ar.toFixed(4);
-  computeAll();
-}
-function footprint(alt) {
-  const hFOV=+document.getElementById('hFOV').value||78.8, ar=+document.getElementById('aspectRatio').value||1.3333;
-  const vFOV=R2D*2*Math.atan(Math.tan(hFOV/2*D2R)/ar);
-  return {fw:2*alt*Math.tan(hFOV/2*D2R),fh:2*alt*Math.tan(vFOV/2*D2R)};
-}
-
 // ─── FREEHAND DRAW ───────────────────────────────────────────────────────────
 let _fhActive=false, _fhPts=[], _fhPreview=null;
 
@@ -542,7 +445,7 @@ function circleToPolygon(center, radiusM, nPts=60) {
 
 // ─── MAP ─────────────────────────────────────────────────────────────────────
 let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false, _satBtn=null, _fhBtn=null;
-const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null,centre:null};
+const _ov={orbitCW:null,orbitCCW:null,perim:null,centre:null};
 
 function toggleSatellite(){
   _satActive=!_satActive;
@@ -876,19 +779,6 @@ function updateMapOverlays() {
   if(pts.length<3) return;
 
   const polyOpts={interactive:false};
-  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
-
-  // Grid 1 (brighter)
-  const g1=getGridLines(pts,d1);
-  if(g1.length) {
-    _ov.grid1=L.layerGroup(g1.map(ll=>L.polyline(ll,{...polyOpts,color:'#4f9ef8',opacity:0.45,weight:1}))).addTo(map);
-  }
-
-  // Grid 2 (dimmer)
-  const g2=getGridLines(pts,d2);
-  if(g2.length) {
-    _ov.grid2=L.layerGroup(g2.map(ll=>L.polyline(ll,{...polyOpts,color:'#4f9ef8',opacity:0.22,weight:1}))).addTo(map);
-  }
 
   // Orbit CW
   const oCW=getOrbitPoints(pts,'cw');
@@ -915,85 +805,11 @@ function updateMapOverlays() {
 }
 
 // ─── FLIGHT TIME HELPERS ──────────────────────────────────────────────────────
-// Total drone path distance for one grid mission (metres)
-function gridPathLength(pts, angleDeg) {
-  if(pts.length<3) return 0;
-  const c=centroid(pts), alt=n('a_alt',40);
-  const sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
-  const buf=n('a_buffer',15), {fw}=footprint(alt), rowSpacing=fw*(1-sideOv);
-  if(rowSpacing<=0) return 0;
-  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
-  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
-  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
-  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
-  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
-  const rowLen=maxD-minD; let nRows=0;
-  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing) nRows++;
-  // lawn-mower: fly each row + step sideways to next row start
-  return nRows*rowLen + Math.max(0,nRows-1)*rowSpacing;
-}
-
 function fmtTime(secs){
   if(secs<60) return `${Math.round(secs)}s`;
   const m=Math.floor(secs/60), s=Math.round(secs%60);
   return s>0?`${m}m ${s}s`:`${m}m`;
 }
-
-// ─── MISSION A: GRID ─────────────────────────────────────────────────────────
-function buildGrid(pts, angleDeg) {
-  if(pts.length<3) return [];
-  const c=centroid(pts), alt=n('a_alt',40), speed=Math.max(0.1,n('a_speed',3));
-  const ival=n('a_interval',2), sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
-  const pitch=n('a_pitch',-80), buf=n('a_buffer',15), {fw}=footprint(alt);
-  const rowSpacing=fw*(1-sideOv);
-  if(rowSpacing<=0) return [];
-  const θ=angleDeg*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
-  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
-  const projD=local.map(l=>l.x*dx+l.y*dy), projP=local.map(l=>l.x*px+l.y*py);
-  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
-  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
-  const rows=[]; let fwd=true;
-  for(let p=minP;p<=maxP+rowSpacing*0.5;p+=rowSpacing){
-    const sD=fwd?minD:maxD, eD=fwd?maxD:minD;
-    const s=fromLocal(px*p+dx*sD,py*p+dy*sD,c.lat,c.lng);
-    const e=fromLocal(px*p+dx*eD,py*p+dy*eD,c.lat,c.lng);
-    const hdg=fwd?angleDeg%360:(angleDeg+180)%360;
-    rows.push(wp({lat:s.lat,lng:s.lng,alt,hdg,pitch,speed,interval:ival}));
-    rows.push(wp({lat:e.lat,lng:e.lng,alt,hdg,pitch,speed,interval:-1}));
-    fwd=!fwd;
-  }
-  return rows;
-}
-
-function computeA() {
-  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
-  document.getElementById('btn_a1').textContent=`↓ Mission A — Grid ${d1}°`;
-  document.getElementById('btn_a2').textContent=`↓ Mission A — Grid ${d2}°`;
-  const pts=parsePoly();
-  if(pts.length<3){document.getElementById('a_stats').innerHTML='—';return;}
-  const alt=n('a_alt',40), speed=Math.max(0.1,n('a_speed',3)), ival=n('a_interval',2);
-  const sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
-  const {fw,fh}=footprint(alt), rowSpacing=fw*(1-sideOv), photoSpacing=speed*ival;
-  const frontOv=rowSpacing>0?Math.round((fh-photoSpacing)/fh*100):0;
-  const r0=buildGrid(pts,d1), r1=buildGrid(pts,d2);
-  const w0=r0.length, w1=r1.length;
-  const len0=gridPathLength(pts,d1), len1=gridPathLength(pts,d2);
-  const t0=fmtTime(len0/speed), t1=fmtTime(len1/speed);
-  document.getElementById('a_stats').innerHTML=
-    `Footprint <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)} m</span> · `+
-    `Row spacing <span class="sv">${rowSpacing.toFixed(1)} m</span> · `+
-    `Photo every <span class="sv">${photoSpacing.toFixed(1)} m</span> · `+
-    `Front overlap <span class="sv${frontOv<70?' warn':''}">~${frontOv}%</span> · `+
-    `Grid ${d1}°: <span class="sv${w0>99?' warn':''}">${w0} WP</span> · `+
-    `<span class="sv">~${t0}</span> · `+
-    `Grid ${d2}°: <span class="sv${w1>99?' warn':''}">${w1} WP</span> · `+
-    `<span class="sv">~${t1}</span>`+
-    (w0>99||w1>99?` · <span class="warn">⚠ >99 WP — split into smaller areas</span>`:'');
-  document.getElementById('fovStats').innerHTML=`@${alt}m: <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)}m</span>`;
-}
-
-function downloadA(){const d=n('a_startDir',0);doDownload(buildGrid(parsePoly(),d),`mission_A_grid_${d}deg.csv`,'a_dlcount',`Grid ${d}°`);}
-function downloadA2(){const d=(n('a_startDir',0)+n('a_crossDir',90))%360;doDownload(buildGrid(parsePoly(),d),`mission_A_grid_${d}deg.csv`,'a_dlcount',`Grid ${d}°`);}
 
 // ─── MISSION B: ORBIT ────────────────────────────────────────────────────────
 function buildOrbit(pts, dir, altOverride) {
@@ -1128,10 +944,7 @@ function downloadD(){doDownload(buildCentre(parsePoly()),'mission_D_centre.csv',
 function downloadAll(){
   const pts=parsePoly();
   if(pts.length<3){alert('Draw a polygon on the map first.');return;}
-  const d1=n('a_startDir',0),d2=(d1+n('a_crossDir',90))%360;
   const files=[
-    [buildGrid(pts,d1),`mission_A_grid_${d1}deg.csv`],
-    [buildGrid(pts,d2),`mission_A_grid_${d2}deg.csv`],
     [buildOrbit(pts,'cw'),'mission_B_orbit_CW.csv'],
     [buildOrbit(pts,'ccw',n('b_alt2',15)),'mission_B_orbit_CCW.csv'],
     [buildPerimeter(pts),'mission_C_pass1.csv'],
@@ -1180,23 +993,19 @@ function updateTotalTime() {
   if(!el) return;
   const pts=parsePoly();
   if(pts.length<3){el.innerHTML='Draw a polygon to see total time estimate.';return;}
-  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
-  const aSpeed=Math.max(0.1,n('a_speed',3));
   const bSpeed=Math.max(0.1,n('b_speed',2));
   const cSpeed=Math.max(0.1,n('c_speed',1.5));
   const circ=2*Math.PI*n('b_radius',30);
   const passes=n('c_passes',1);
   const insetPerim=polyPerimeter(insetPoly(pts,n('c_offset',8)));
   const dSpeed=Math.max(0.1,n('d_speed',3)), dRadius=n('d_radius',30);
-  const secA=(gridPathLength(pts,d1)+gridPathLength(pts,d2))/aSpeed;
   const secB=circ*2/bSpeed; // CW + CCW
   const secC=insetPerim*passes/cSpeed;
   const secD=dRadius*(1+2*Math.PI)/dSpeed;
-  const total=secA+secB+secC+secD;
+  const total=secB+secC+secD;
   el.innerHTML=
     `<strong>Total estimated airtime:</strong> `+
     `<span class="sv" style="font-size:14px">${fmtTime(total)}</span> `+
-    `&nbsp;·&nbsp; Grid A: <span class="sv">${fmtTime(secA)}</span> `+
     `&nbsp;·&nbsp; Orbit B ×2: <span class="sv">${fmtTime(secB)}</span> `+
     `&nbsp;·&nbsp; Perimeter C: <span class="sv">${fmtTime(secC)}</span> `+
     `&nbsp;·&nbsp; Centre D: <span class="sv">${fmtTime(secD)}</span>`+
@@ -1207,7 +1016,7 @@ function updateTotalTime() {
 function computeAll(){
   const pts=parsePoly();
   updateAreaStats(pts);
-  computeA(); computeB(); computeC(); computeD();
+  computeB(); computeC(); computeD();
   updateTotalTime();
   updateMapOverlays();
 }
