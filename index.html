@@ -608,7 +608,7 @@ function initMap() {
   document.addEventListener('mousemove', function(e) {
     if (!_rotActive) return;
     const delta = _angleFromCenter(e.clientX, e.clientY) - _rotStartAngle;
-    map.setBearing(_rotStartBearing + delta);
+    map.setBearing(_rotStartBearing + delta * 0.5);
   });
 
   document.addEventListener('mouseup', function() {
