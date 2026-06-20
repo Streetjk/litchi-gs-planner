@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Litchi GS Mission Planner</title>
+<style>
+:root {
+  --bg:#0d0f18;--surface:#141720;--surface2:#1d2030;--surface3:#252840;
+  --accent:#4f9ef8;--green:#3fcf8e;--orange:#f59e0b;--red:#f87171;
+  --text:#dce4f0;--muted:#5a6480;--border:#252840;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',system-ui,sans-serif;
+  font-size:13px;line-height:1.5;padding:24px 20px 60px;max-width:920px;margin:0 auto}
+h1{font-size:20px;font-weight:700;color:#fff}
+.tagline{color:var(--muted);font-size:12px;margin-top:4px;margin-bottom:28px}
+h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:14px}
+.card-title{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.mission-badge{font-size:11px;font-weight:800;padding:3px 10px;border-radius:5px;letter-spacing:.04em}
+.badge-a{background:rgba(79,158,248,.18);color:#7eb8ff}
+.badge-b{background:rgba(63,207,142,.18);color:#5de0a8}
+.badge-c{background:rgba(245,158,11,.18);color:#fbbf4a}
+.mission-name{font-size:14px;font-weight:600;color:#fff}
+.mission-desc{font-size:11px;color:var(--muted);margin-left:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px}
+.field{display:flex;flex-direction:column;gap:4px}
+label{font-size:11px;color:var(--muted)}
+input[type=number],input[type=text],textarea,select{
+  width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;
+  color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;appearance:none;transition:border-color .15s}
+select{cursor:pointer}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+textarea{font-family:'SF Mono','Menlo',monospace;font-size:12px;resize:vertical}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;
+  font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:filter .15s,transform .1s}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-a{background:#2256a8;color:#7eb8ff}
+.btn-b{background:#1a6644;color:#5de0a8}
+.btn-c{background:#7a5218;color:#fbbf4a}
+.btn-all{background:linear-gradient(135deg,#2256a8,#1a6644);color:#fff;font-size:14px;padding:11px 26px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.sv{display:inline;color:var(--text);font-weight:600}
+.stats-bar{background:var(--surface2);border-radius:7px;padding:9px 14px;font-size:12px;
+  color:var(--muted);margin-top:12px;display:flex;flex-wrap:wrap;gap:0 16px;line-height:1.8}
+.warn{color:var(--red)!important}
+.tip{background:rgba(79,158,248,.07);border:1px solid rgba(79,158,248,.18);border-radius:7px;
+  padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+.tip strong{color:var(--accent)}
+.tip code{background:var(--surface3);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:11px;color:var(--text)}
+canvas{display:block;border-radius:8px;background:var(--surface2);width:100%;margin-top:12px;cursor:crosshair}
+.dl-count{font-size:11px;color:var(--green);margin-left:4px}
+.small{font-size:11px;color:var(--muted);margin-top:5px}
+</style>
+</head>
+<body>
+
+<h1>Litchi Gaussian Splat Mission Planner</h1>
+<p class="tagline">Generates Litchi Hub–compatible waypoint CSV files for 3DGS drone capture — Missions A (grid) · B (orbit) · C (perimeter)</p>
+
+<!-- AREA -->
+<div class="card">
+  <div class="card-title"><h2>1 — Capture Area</h2></div>
+  <div class="tip">
+    <strong>Getting coordinates from Google Maps:</strong> Right-click any corner → <strong>What's here?</strong> → tap the lat,lng shown at the bottom to copy. Repeat for each corner. Paste below, one <code>lat, lng</code> per line. 4 points = rectangle; add more for irregular shapes.
+  </div>
+  <div class="grid2" style="gap:14px;align-items:start">
+    <div class="field">
+      <label>Polygon corners — lat, lng (one per line, ≥ 3 points)</label>
+      <textarea id="polygon" rows="8"
+        placeholder="-31.950200, 115.860200&#10;-31.950200, 115.861400&#10;-31.951100, 115.861400&#10;-31.951100, 115.860200"
+        oninput="scheduleUpdate()"></textarea>
+      <div class="small">Clockwise or counter-clockwise — both work.</div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-ghost" onclick="loadExample()">Load example site</button>
+        <button class="btn btn-primary" onclick="computeAll()">↻ Update</button>
+      </div>
+    </div>
+    <canvas id="preview" height="220"></canvas>
+  </div>
+  <div class="stats-bar" id="areaStats">Enter polygon coordinates above to see site stats.</div>
+</div>
+
+<!-- CAMERA -->
+<div class="card">
+  <div class="card-title"><h2>2 — Camera Profile</h2></div>
+  <div class="grid4">
+    <div class="field">
+      <label>Drone preset</label>
+      <select id="cameraPreset" onchange="applyCamera()">
+        <option value="mavic1">Mavic Pro 1 — 28 mm</option>
+        <option value="mavic2pro">Mavic 2 Pro — 28 mm</option>
+        <option value="mavic3">Mavic 3 — 24 mm</option>
+        <option value="mini3">Mini 3 Pro</option>
+        <option value="air2s">Air 2S</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Horizontal FOV (°)</label>
+      <input type="number" id="hFOV" value="78.8" step="0.1" min="30" max="120" oninput="computeAll()">
+    </div>
+    <div class="field">
+      <label>Sensor aspect ratio</label>
+      <select id="aspectRatio" onchange="computeAll()">
+        <option value="1.3333">4:3</option>
+        <option value="1.7778">16:9</option>
+        <option value="1.0">1:1</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <div class="stats-bar" id="fovStats" style="font-size:11px;padding:6px 10px">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- MISSION A -->
+<div class="card">
+  <div class="card-title">
+    <span class="mission-badge badge-a">A</span>
+    <span class="mission-name">Overhead Grid</span>
+    <span class="mission-desc">Two grids (0° + 90°) for top-down structure</span>
+  </div>
+  <div class="grid4">
+    <div class="field"><label>Altitude AGL (m)</label>
+      <input type="number" id="a_alt" value="40" min="20" max="120" oninput="computeA()"></div>
+    <div class="field"><label>Speed (m/s)</label>
+      <input type="number" id="a_speed" value="3" min="0.5" max="10" step="0.5" oninput="computeA()"></div>
+    <div class="field"><label>Photo interval (s)</label>
+      <input type="number" id="a_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeA()"></div>
+    <div class="field"><label>Side overlap (%)</label>
+      <input type="number" id="a_sideOverlap" value="75" min="50" max="90" oninput="computeA()"></div>
+    <div class="field"><label>Gimbal pitch (°)</label>
+      <input type="number" id="a_pitch" value="-80" min="-90" max="-45" oninput="computeA()"></div>
+    <div class="field"><label>Perimeter buffer (m)</label>
+      <input type="number" id="a_buffer" value="15" min="0" max="80" oninput="computeA()"></div>
+    <div class="field"><label>Start direction</label>
+      <select id="a_startDir" onchange="computeA()">
+        <option value="0">0° — N↔S rows</option>
+        <option value="90">90° — E↔W rows</option>
+        <option value="45">45° diagonal</option>
+      </select>
+    </div>
+    <div class="field"><label>Cross-grid offset</label>
+      <select id="a_crossDir" onchange="computeA()">
+        <option value="90">+90°</option>
+        <option value="45">+45°</option>
+        <option value="60">+60°</option>
+      </select>
+    </div>
+  </div>
+  <div class="stats-bar" id="a_stats">—</div>
+  <div class="btn-row">
+    <button id="btn_a1" class="btn btn-a" onclick="downloadA()">↓ Mission A — Grid 0°</button>
+    <button id="btn_a2" class="btn btn-a" onclick="downloadA2()">↓ Mission A — Grid 90°</button>
+    <span class="dl-count" id="a_dlcount"></span>
+  </div>
+</div>
+
+<!-- MISSION B -->
+<div class="card">
+  <div class="card-title">
+    <span class="mission-badge badge-b">B</span>
+    <span class="mission-name">Oblique Orbit</span>
+    <span class="mission-desc">CW + CCW circles for walls, depth, and detail</span>
+  </div>
+  <div class="grid4">
+    <div class="field"><label>Altitude AGL — CW (m)</label>
+      <input type="number" id="b_alt" value="20" min="5" max="80" oninput="computeB()"></div>
+    <div class="field"><label>Altitude AGL — CCW (m)</label>
+      <input type="number" id="b_alt2" value="15" min="5" max="80" oninput="computeB()"></div>
+    <div class="field"><label>Radius from centre (m)</label>
+      <input type="number" id="b_radius" value="30" min="5" max="150" oninput="computeB()"></div>
+    <div class="field"><label>Speed (m/s)</label>
+      <input type="number" id="b_speed" value="2" min="0.5" max="8" step="0.5" oninput="computeB()"></div>
+    <div class="field"><label>Gimbal pitch (°)</label>
+      <input type="number" id="b_pitch" value="-35" min="-80" max="-10" oninput="computeB()"></div>
+    <div class="field"><label>Waypoints per orbit</label>
+      <input type="number" id="b_points" value="24" min="8" max="72" step="4" oninput="computeB()"></div>
+    <div class="field"><label>Photo interval (s)</label>
+      <input type="number" id="b_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeB()"></div>
+    <div class="field"><label>Start bearing (°)</label>
+      <input type="number" id="b_startBearing" value="0" min="0" max="359" oninput="computeB()"
+        title="Compass bearing where the orbit begins. 0=North, 90=East. Start on the safest side."></div>
+  </div>
+  <div class="stats-bar" id="b_stats">—</div>
+  <div class="btn-row">
+    <button class="btn btn-b" onclick="downloadB('cw')">↓ Mission B — CW orbit</button>
+    <button class="btn btn-b" onclick="downloadB('ccw')">↓ Mission B — CCW orbit</button>
+    <span class="dl-count" id="b_dlcount"></span>
+  </div>
+</div>
+
+<!-- MISSION C -->
+<div class="card">
+  <div class="card-title">
+    <span class="mission-badge badge-c">C</span>
+    <span class="mission-name">Detail Perimeter Pass</span>
+    <span class="mission-desc">Low slow pass for doors, signs, textures</span>
+  </div>
+  <div class="grid4">
+    <div class="field"><label>Altitude AGL (m)</label>
+      <input type="number" id="c_alt" value="12" min="5" max="40" oninput="computeC()"></div>
+    <div class="field"><label>Speed (m/s)</label>
+      <input type="number" id="c_speed" value="1.5" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
+    <div class="field"><label>Gimbal pitch (°)</label>
+      <input type="number" id="c_pitch" value="-25" min="-60" max="-5" oninput="computeC()"></div>
+    <div class="field"><label>Photo interval (s)</label>
+      <input type="number" id="c_interval" value="2" min="0.5" max="5" step="0.5" oninput="computeC()"></div>
+    <div class="field"><label>Inset from boundary (m)</label>
+      <input type="number" id="c_offset" value="8" min="0" max="40" oninput="computeC()"></div>
+    <div class="field"><label>Passes</label>
+      <select id="c_passes" onchange="computeC()">
+        <option value="1">1 pass</option>
+        <option value="2">2 passes (2nd alt)</option>
+      </select>
+    </div>
+    <div class="field"><label>2nd pass altitude (m)</label>
+      <input type="number" id="c_alt2" value="6" min="3" max="30" oninput="computeC()"></div>
+    <div class="field"><label>2nd pass pitch (°)</label>
+      <input type="number" id="c_pitch2" value="-15" min="-60" max="-5" oninput="computeC()"></div>
+  </div>
+  <div class="stats-bar" id="c_stats">—</div>
+  <div class="btn-row">
+    <button class="btn btn-c" onclick="downloadC(1)">↓ Mission C — Pass 1</button>
+    <button id="c_pass2btn" class="btn btn-c" onclick="downloadC(2)" style="display:none">↓ Mission C — Pass 2</button>
+    <span class="dl-count" id="c_dlcount"></span>
+  </div>
+</div>
+
+<!-- DOWNLOAD ALL -->
+<div class="card" style="text-align:center;padding:24px">
+  <button class="btn btn-all" onclick="downloadAll()">↓ Download All Missions</button>
+  <p class="small" style="margin-top:10px">
+    Import each CSV at <strong>flylitchi.com/hub</strong> → Waypoint Mission → Import<br>
+    Verify waypoints on the hub map before flying.
+  </p>
+</div>
+
+<script>
+// ─── LITCHI CSV ──────────────────────────────────────────────────────────────
+// 46-column Litchi Hub waypoint format
+const HEADER = [
+  'latitude','longitude','altitude(m)','heading(deg)','curvesize(m)','rotationdir',
+  'gimbalmode','gimbalpitchangle',
+  ...Array.from({length:15},(_,i)=>[`actiontype${i+1}`,`actionparam${i+1}`]).flat(),
+  'altitudemode','speed(m/s)',
+  'poi_latitude','poi_longitude','poi_altitude(m)','poi_altitudemode',
+  'photo_timeinterval','photo_distinterval'
+].join(',');
+
+const NO_ACTIONS = Array(30).fill(-1);
+
+function wp({lat, lng, alt, hdg=-1, pitch=-80, speed=3, interval=-1}) {
+  return [
+    lat.toFixed(7), lng.toFixed(7),
+    alt.toFixed(1),
+    Math.round(hdg < 0 ? -1 : hdg),
+    0,   // curvesize
+    0,   // rotationdir: auto
+    2,   // gimbalmode: INTERPOLATE — pitch is actually applied (was 0=disabled)
+    Math.round(pitch),
+    ...NO_ACTIONS,
+    0,   // altitudemode: AGL
+    Math.max(0.1, speed).toFixed(1),
+    0, 0, 0, 0,  // POI unused
+    interval > 0 ? interval.toFixed(1) : -1,
+    -1   // photo_distinterval
+  ].join(',');
+}
+
+function makeCSV(rows) { return [HEADER, ...rows].join('\n'); }
+
+// ─── GEO MATH ────────────────────────────────────────────────────────────────
+const R2D = 180/Math.PI, D2R = Math.PI/180;
+const M_PER_DEG_LAT = 111320;
+const mPerDegLng = lat => 111320 * Math.cos(lat * D2R);
+
+const centroid = pts => ({
+  lat: pts.reduce((s,p)=>s+p.lat,0)/pts.length,
+  lng: pts.reduce((s,p)=>s+p.lng,0)/pts.length
+});
+
+const toLocal = (lat,lng,cLat,cLng) => ({
+  x: (lng-cLng)*mPerDegLng(cLat), y: (lat-cLat)*M_PER_DEG_LAT
+});
+
+const fromLocal = (x,y,cLat,cLng) => ({
+  lat: cLat + y/M_PER_DEG_LAT, lng: cLng + x/mPerDegLng(cLat)
+});
+
+function signedArea2(local) {
+  let a = 0;
+  for (let i=0; i<local.length; i++) {
+    const j=(i+1)%local.length;
+    a += local[i].x*local[j].y - local[j].x*local[i].y;
+  }
+  return a;
+}
+
+function polyArea(pts) {
+  const c = centroid(pts);
+  return Math.abs(signedArea2(pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng))))/2;
+}
+
+function polyPerimeter(pts) {
+  const c = centroid(pts);
+  let p=0;
+  for (let i=0;i<pts.length;i++) {
+    const j=(i+1)%pts.length;
+    const a=toLocal(pts[i].lat,pts[i].lng,c.lat,c.lng);
+    const b=toLocal(pts[j].lat,pts[j].lng,c.lat,c.lng);
+    p+=Math.hypot(b.x-a.x,b.y-a.y);
+  }
+  return p;
+}
+
+function maxRadius(pts,c) {
+  return Math.max(...pts.map(p=>{const l=toLocal(p.lat,p.lng,c.lat,c.lng);return Math.hypot(l.x,l.y);}));
+}
+
+function bearing(lat1,lng1,lat2,lng2) {
+  const dL=(lng2-lng1)*D2R;
+  const y=Math.sin(dL)*Math.cos(lat2*D2R);
+  const x=Math.cos(lat1*D2R)*Math.sin(lat2*D2R)-Math.sin(lat1*D2R)*Math.cos(lat2*D2R)*Math.cos(dL);
+  return (Math.atan2(y,x)*R2D+360)%360;
+}
+
+// ─── CAMERA ──────────────────────────────────────────────────────────────────
+const CAMERAS = {
+  mavic1:{hFOV:78.8,ar:4/3}, mavic2pro:{hFOV:68.9,ar:4/3},
+  mavic3:{hFOV:73.7,ar:4/3}, mini3:{hFOV:82.1,ar:4/3},
+  air2s:{hFOV:88.0,ar:4/3},  custom:null
+};
+
+function applyCamera() {
+  const p = CAMERAS[document.getElementById('cameraPreset').value];
+  if (!p) return;
+  document.getElementById('hFOV').value = p.hFOV;
+  document.getElementById('aspectRatio').value = p.ar.toFixed(4);
+  computeAll();
+}
+
+function footprint(alt) {
+  const hFOV = +document.getElementById('hFOV').value || 78.8;
+  const ar   = +document.getElementById('aspectRatio').value || 1.3333;
+  const vFOV = R2D*2*Math.atan(Math.tan(hFOV/2*D2R)/ar);
+  return { fw: 2*alt*Math.tan(hFOV/2*D2R), fh: 2*alt*Math.tan(vFOV/2*D2R) };
+}
+
+// ─── INPUT HELPERS ────────────────────────────────────────────────────────────
+function parsePoly() {
+  return document.getElementById('polygon').value.trim()
+    .split('\n').filter(l=>l.trim())
+    .map(l=>{
+      const p=l.trim().replace(/[()]/g,'').split(/[\s,]+/);
+      if(p.length<2)return null;
+      const lat=parseFloat(p[0]),lng=parseFloat(p[1]);
+      return isNaN(lat)||isNaN(lng)?null:{lat,lng};
+    }).filter(Boolean);
+}
+
+// Safe numeric read with fallback
+function n(id,fb=1) { const v=parseFloat(document.getElementById(id).value); return isNaN(v)?fb:v; }
+
+// ─── MISSION A: GRID ─────────────────────────────────────────────────────────
+function buildGrid(pts, angleDeg) {
+  if (pts.length<3) return [];
+  const c       = centroid(pts);
+  const alt     = n('a_alt',40);
+  const speed   = Math.max(0.1,n('a_speed',3));
+  const ival    = n('a_interval',2);
+  const sideOv  = Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
+  const pitch   = n('a_pitch',-80);
+  const buf     = n('a_buffer',15);
+  const {fw}    = footprint(alt);
+  const rowSpacing = fw*(1-sideOv);
+  if (rowSpacing<=0) return [];
+
+  // Flying direction bearing θ in East-North local coords: dir=(sinθ,cosθ), perp=(cosθ,−sinθ)
+  const θ = angleDeg*D2R;
+  const dx=Math.sin(θ), dy=Math.cos(θ);
+  const px=Math.cos(θ), py=-Math.sin(θ);
+
+  const local = pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const projD = local.map(l=>l.x*dx+l.y*dy);
+  const projP = local.map(l=>l.x*px+l.y*py);
+  const minD=Math.min(...projD)-buf, maxD=Math.max(...projD)+buf;
+  const minP=Math.min(...projP)-buf, maxP=Math.max(...projP)+buf;
+
+  const rows=[];
+  let fwd=true;
+  for (let p=minP; p<=maxP+rowSpacing*0.5; p+=rowSpacing) {
+    const sD=fwd?minD:maxD, eD=fwd?maxD:minD;
+    const s=fromLocal(px*p+dx*sD, py*p+dy*sD, c.lat,c.lng);
+    const e=fromLocal(px*p+dx*eD, py*p+dy*eD, c.lat,c.lng);
+    const hdg=fwd?angleDeg%360:(angleDeg+180)%360;
+    rows.push(wp({lat:s.lat,lng:s.lng,alt,hdg,pitch,speed,interval:ival}));
+    rows.push(wp({lat:e.lat,lng:e.lng,alt,hdg,pitch,speed,interval:-1}));
+    fwd=!fwd;
+  }
+  return rows;
+}
+
+function computeA() {
+  const startDir = n('a_startDir',0);
+  const crossOff = n('a_crossDir',90);
+  const dir2 = (startDir+crossOff)%360;
+  document.getElementById('btn_a1').textContent = `↓ Mission A — Grid ${startDir}°`;
+  document.getElementById('btn_a2').textContent = `↓ Mission A — Grid ${dir2}°`;
+
+  const pts = parsePoly();
+  if (pts.length<3) { document.getElementById('a_stats').innerHTML='—'; return; }
+
+  const alt    = n('a_alt',40);
+  const speed  = Math.max(0.1,n('a_speed',3));
+  const ival   = n('a_interval',2);
+  const sideOv = Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
+  const {fw,fh}= footprint(alt);
+  const rowSpacing = fw*(1-sideOv);
+  const photoSpacing = speed*ival;
+  const frontOv = rowSpacing>0 ? Math.round((fh-photoSpacing)/fh*100) : 0;
+  const r0=buildGrid(pts,startDir), r1=buildGrid(pts,dir2);
+  const w0=r0.length, w1=r1.length;
+  const estTime = rowSpacing>0&&speed>0 ? Math.round(polyArea(pts)/(rowSpacing*speed)/60) : '?';
+
+  document.getElementById('a_stats').innerHTML =
+    `Footprint <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)} m</span> · `+
+    `Row spacing <span class="sv">${rowSpacing.toFixed(1)} m</span> · `+
+    `Photo every <span class="sv">${photoSpacing.toFixed(1)} m</span> · `+
+    `Front overlap <span class="sv${frontOv<70?' warn':''}">~${frontOv}%</span> · `+
+    `Grid ${startDir}°: <span class="sv${w0>99?' warn':''}">${w0} WP${w0>99?' ⚠>99':''}</span> · `+
+    `Grid ${dir2}°: <span class="sv${w1>99?' warn':''}">${w1} WP${w1>99?' ⚠>99':''}</span> · `+
+    `Est. <span class="sv">~${estTime} min</span>/grid`;
+
+  document.getElementById('fovStats').innerHTML =
+    `@${alt}m: <span class="sv">${fw.toFixed(1)}×${fh.toFixed(1)}m</span>`;
+}
+
+function downloadA()  {
+  const d=n('a_startDir',0);
+  doDownload(buildGrid(parsePoly(),d), `mission_A_grid_${d}deg.csv`, 'a_dlcount', `Grid ${d}°`);
+}
+function downloadA2() {
+  const d=(n('a_startDir',0)+n('a_crossDir',90))%360;
+  doDownload(buildGrid(parsePoly(),d), `mission_A_grid_${d}deg.csv`, 'a_dlcount', `Grid ${d}°`);
+}
+
+// ─── MISSION B: ORBIT ────────────────────────────────────────────────────────
+function buildOrbit(pts, dir, altOverride) {
+  if (pts.length<3) return [];
+  const c          = centroid(pts);
+  const alt        = altOverride ?? n('b_alt',20);
+  const radius     = n('b_radius',30);
+  const speed      = Math.max(0.1,n('b_speed',2));
+  const pitch      = n('b_pitch',-35);
+  const nPts       = Math.max(4,Math.round(n('b_points',24)));
+  const ival       = n('b_interval',2);
+  const startBrg   = n('b_startBearing',0);
+  const isCCW      = dir==='ccw';
+  const rows=[];
+  for (let i=0; i<=nPts; i++) {
+    const frac  = (i%nPts)/nPts;
+    const angle = frac*2*Math.PI*(isCCW?-1:1) + startBrg*D2R;
+    const pt    = fromLocal(Math.sin(angle)*radius, Math.cos(angle)*radius, c.lat,c.lng);
+    const hdg   = bearing(pt.lat,pt.lng,c.lat,c.lng); // face center
+    rows.push(wp({lat:pt.lat,lng:pt.lng,alt,hdg,pitch,speed,interval:ival}));
+  }
+  return rows;
+}
+
+function computeB() {
+  const pts    = parsePoly();
+  const radius = n('b_radius',30);
+  const speed  = Math.max(0.1,n('b_speed',2));
+  const nPts   = Math.max(4,Math.round(n('b_points',24)));
+  const ival   = n('b_interval',2);
+  const circ   = 2*Math.PI*radius;
+  const photoSpacing = speed*ival;
+  const wpCount = nPts+1;
+
+  let s = `Circumference <span class="sv">${circ.toFixed(0)} m</span> · `+
+    `Photo every <span class="sv">${photoSpacing.toFixed(1)} m</span> · `+
+    `WP spacing ${(circ/nPts).toFixed(1)} m · `+
+    `<span class="sv${wpCount>99?' warn':''}">${wpCount} WP/orbit${wpCount>99?' ⚠>99':''}</span>`;
+
+  if (pts.length>=3) {
+    const c=centroid(pts), maxR=maxRadius(pts,c);
+    s += ` · Site max radius <span class="sv">${maxR.toFixed(0)} m</span>`;
+    if (radius<maxR) s += ` · <span class="warn">⚠ Radius < site extent — fly inside. Recommend ≥${Math.ceil(maxR+10)} m</span>`;
+  }
+  document.getElementById('b_stats').innerHTML=s;
+}
+
+function downloadB(dir) {
+  const alt2 = dir==='ccw' ? n('b_alt2',15) : undefined;
+  doDownload(buildOrbit(parsePoly(),dir,alt2), `mission_B_orbit_${dir.toUpperCase()}.csv`, 'b_dlcount', `Orbit ${dir.toUpperCase()}`);
+}
+
+// ─── MISSION C: PERIMETER ────────────────────────────────────────────────────
+// Miter-based polygon inset — maintains constant offset from each edge (not radial scaling)
+function insetPoly(pts, insetM) {
+  if (insetM<=0) return [...pts];
+  const c=centroid(pts), n_=pts.length;
+  const local=pts.map(p=>toLocal(p.lat,p.lng,c.lat,c.lng));
+  const isCCW = signedArea2(local)>0; // CCW: right-hand normal is inward
+  const sign = isCCW?1:-1;
+  const result=[];
+  for (let i=0; i<n_; i++) {
+    const p=local[(i-1+n_)%n_], q=local[i], r=local[(i+1)%n_];
+    const ex1=q.x-p.x, ey1=q.y-p.y, l1=Math.hypot(ex1,ey1);
+    const ex2=r.x-q.x, ey2=r.y-q.y, l2=Math.hypot(ex2,ey2);
+    if (l1<0.001||l2<0.001) { result.push(fromLocal(q.x,q.y,c.lat,c.lng)); continue; }
+    // Inward unit normals
+    const nx1=sign*ey1/l1, ny1=-sign*ex1/l1;
+    const nx2=sign*ey2/l2, ny2=-sign*ex2/l2;
+    // Bisector of the two inward normals
+    const bx=nx1+nx2, by=ny1+ny2, bl=Math.hypot(bx,by);
+    let ox,oy;
+    if (bl<0.001) { ox=nx1*insetM; oy=ny1*insetM; }
+    else {
+      const bux=bx/bl, buy=by/bl;
+      const cosA=nx1*bux+ny1*buy;
+      // Cap miter at 4× to avoid explosion at very sharp corners
+      const miterLen=cosA>0.25?insetM/cosA:insetM*4;
+      ox=bux*miterLen; oy=buy*miterLen;
+    }
+    result.push(fromLocal(q.x+ox,q.y+oy,c.lat,c.lng));
+  }
+  return result;
+}
+
+function buildPerimeter(pts, altOvr, pitchOvr) {
+  if (pts.length<3) return [];
+  const alt   = altOvr  ?? n('c_alt',12);
+  const speed = Math.max(0.1,n('c_speed',1.5));
+  const pitch = pitchOvr ?? n('c_pitch',-25);
+  const ival  = n('c_interval',2);
+  const offset= n('c_offset',8);
+  const inset = insetPoly(pts,offset);
+  const rows=[];
+  for (let i=0; i<inset.length; i++) {
+    const pt=inset[i], nx=inset[(i+1)%inset.length];
+    rows.push(wp({lat:pt.lat,lng:pt.lng,alt,hdg:bearing(pt.lat,pt.lng,nx.lat,nx.lng),pitch,speed,interval:ival}));
+  }
+  rows.push(rows[0]); // close loop
+  return rows;
+}
+
+function computeC() {
+  const passes=n('c_passes',1);
+  document.getElementById('c_pass2btn').style.display=passes>1?'inline-flex':'none';
+  const pts=parsePoly();
+  if (pts.length<3) { document.getElementById('c_stats').innerHTML='—'; return; }
+  const perim =polyPerimeter(pts);
+  const speed =Math.max(0.1,n('c_speed',1.5));
+  const ival  =n('c_interval',2);
+  const wpCount=pts.length+1;
+  document.getElementById('c_stats').innerHTML=
+    `Perimeter <span class="sv">${perim.toFixed(0)} m</span> · `+
+    `Inset <span class="sv">${n('c_offset',8)} m</span> · `+
+    `~<span class="sv">${Math.round(perim/(speed*ival))}</span> photos · `+
+    `<span class="sv${wpCount>99?' warn':''}">${wpCount} WP${wpCount>99?' ⚠>99':''}</span> · `+
+    `Est. <span class="sv">~${Math.round(perim/speed/60)} min</span>/pass`;
+}
+
+function downloadC(pass) {
+  const pts=parsePoly();
+  pass===2
+    ? doDownload(buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv','c_dlcount','Pass 2')
+    : doDownload(buildPerimeter(pts),'mission_C_pass1.csv','c_dlcount','Pass 1');
+}
+
+// ─── DOWNLOAD ALL ────────────────────────────────────────────────────────────
+function downloadAll() {
+  const pts=parsePoly();
+  if (pts.length<3) { alert('Enter at least 3 polygon corners first.'); return; }
+  const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
+  const files=[
+    [buildGrid(pts,d1),  `mission_A_grid_${d1}deg.csv`],
+    [buildGrid(pts,d2),  `mission_A_grid_${d2}deg.csv`],
+    [buildOrbit(pts,'cw'),               'mission_B_orbit_CW.csv'],
+    [buildOrbit(pts,'ccw',n('b_alt2',15)),'mission_B_orbit_CCW.csv'],
+    [buildPerimeter(pts),                 'mission_C_pass1.csv'],
+  ];
+  if (n('c_passes',1)>1)
+    files.push([buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv']);
+  files.forEach(([rows,name],i)=>setTimeout(()=>triggerDownload(makeCSV(rows),name),i*300));
+}
+
+function doDownload(rows,filename,countId,label) {
+  if (parsePoly().length<3) { alert('Enter at least 3 polygon corners first.'); return; }
+  if (!rows.length) { alert('No waypoints generated — check settings.'); return; }
+  triggerDownload(makeCSV(rows),filename);
+  const el=document.getElementById(countId);
+  el.textContent=`✓ ${label} — ${rows.length} WP`;
+  setTimeout(()=>{el.textContent='';},4000);
+}
+
+function triggerDownload(content,filename) {
+  const a=Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(new Blob([content],{type:'text/csv'})), download:filename
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ─── PREVIEW CANVAS ──────────────────────────────────────────────────────────
+// scheduleUpdate debounces polygon textarea input
+let _timer;
+function scheduleUpdate() { clearTimeout(_timer); _timer=setTimeout(computeAll,600); }
+
+// updatePreview draws the canvas — does NOT call computeAll (would recurse)
+function updatePreview() {
+  const canvas=document.getElementById('preview');
+  // Set pixel buffer to match CSS display size (fixes blurry canvas)
+  canvas.width  = Math.round(canvas.getBoundingClientRect().width)||860;
+  canvas.height = 220;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#1d2030'; ctx.fillRect(0,0,W,H);
+
+  const pts=parsePoly();
+  if (pts.length<2) {
+    ctx.fillStyle='#5a6480'; ctx.font='13px system-ui'; ctx.textAlign='center';
+    ctx.fillText('Enter coordinates to preview',W/2,H/2);
+    updateAreaStats(null); return;
+  }
+
+  const b={
+    minLat:Math.min(...pts.map(p=>p.lat)), maxLat:Math.max(...pts.map(p=>p.lat)),
+    minLng:Math.min(...pts.map(p=>p.lng)), maxLng:Math.max(...pts.map(p=>p.lng))
+  };
+  const pad=32;
+  const dLat=b.maxLat-b.minLat||0.0001, dLng=b.maxLng-b.minLng||0.0001;
+  const scale=Math.min((W-pad*2)/dLng,(H-pad*2)/dLat);
+  const cx=W/2, cy=H/2;
+  const midLat=(b.minLat+b.maxLat)/2, midLng=(b.minLng+b.maxLng)/2;
+  const toC=(lat,lng)=>({x:cx+(lng-midLng)*scale, y:cy-(lat-midLat)*scale});
+
+  // Grid preview lines (both directions)
+  if (pts.length>=3) {
+    const alt=n('a_alt',40), sideOv=Math.min(0.95,Math.max(0.1,n('a_sideOverlap',75)/100));
+    const {fw}=footprint(alt); const rowSpacing=fw*(1-sideOv);
+    const buf=n('a_buffer',15);
+    const d1=n('a_startDir',0), d2=(d1+n('a_crossDir',90))%360;
+    const c2=centroid(pts);
+    [d1,d2].forEach((dir,di)=>{
+      ctx.strokeStyle=di===0?'rgba(79,158,248,0.18)':'rgba(79,158,248,0.09)';
+      ctx.lineWidth=1;
+      const θ=dir*D2R, dx=Math.sin(θ), dy=Math.cos(θ), px=Math.cos(θ), py=-Math.sin(θ);
+      const local=pts.map(p=>toLocal(p.lat,p.lng,c2.lat,c2.lng));
+      const pP=local.map(l=>l.x*px+l.y*py), pD=local.map(l=>l.x*dx+l.y*dy);
+      const minP=Math.min(...pP)-buf, maxP=Math.max(...pP)+buf;
+      const minD=Math.min(...pD)-buf, maxD=Math.max(...pD)+buf;
+      if (rowSpacing>0) for (let p=minP;p<=maxP;p+=rowSpacing) {
+        const s=fromLocal(px*p+dx*minD,py*p+dy*minD,c2.lat,c2.lng);
+        const e=fromLocal(px*p+dx*maxD,py*p+dy*maxD,c2.lat,c2.lng);
+        const cs=toC(s.lat,s.lng), ce=toC(e.lat,e.lng);
+        ctx.beginPath(); ctx.moveTo(cs.x,cs.y); ctx.lineTo(ce.x,ce.y); ctx.stroke();
+      }
+    });
+  }
+
+  // Orbit radius ring
+  if (pts.length>=3) {
+    const c2=centroid(pts), radius=n('b_radius',30);
+    const rc=toC(c2.lat,c2.lng), rPx=radius/mPerDegLng(c2.lat)*scale;
+    ctx.beginPath(); ctx.arc(rc.x,rc.y,rPx,0,Math.PI*2);
+    ctx.strokeStyle='rgba(63,207,142,0.3)'; ctx.lineWidth=1.5; ctx.stroke();
+  }
+
+  // Polygon
+  ctx.beginPath();
+  pts.forEach((p,i)=>{const{x,y}=toC(p.lat,p.lng);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.closePath();
+  ctx.fillStyle='rgba(79,158,248,0.1)'; ctx.fill();
+  ctx.strokeStyle='#4f9ef8'; ctx.lineWidth=2; ctx.stroke();
+
+  // Vertices
+  ctx.font='10px system-ui';
+  pts.forEach((p,i)=>{
+    const{x,y}=toC(p.lat,p.lng);
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle='#4f9ef8'; ctx.fill();
+    ctx.fillStyle='#fff'; ctx.textAlign='center';
+    ctx.fillText(i+1,x,y-8);
+  });
+
+  // Centroid dot
+  if (pts.length>=3) {
+    const{x,y}=toC(centroid(pts).lat,centroid(pts).lng);
+    ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.strokeStyle='#3fcf8e'; ctx.lineWidth=2; ctx.stroke();
+  }
+
+  // Area label overlay
+  if (pts.length>=3) {
+    const area=polyArea(pts);
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(8,8,195,20);
+    ctx.fillStyle='#dce4f0'; ctx.font='11px system-ui'; ctx.textAlign='left';
+    ctx.fillText(`${(area/10000).toFixed(4)} ha  (${area.toFixed(0)} m²)`,12,22);
+  }
+
+  updateAreaStats(pts);
+  // ⚠ Do NOT call computeAll() here — infinite recursion
+}
+
+function updateAreaStats(pts) {
+  const el=document.getElementById('areaStats');
+  if (!pts||pts.length<3) { el.innerHTML='Enter polygon coordinates above to see site stats.'; return; }
+  const c=centroid(pts);
+  el.innerHTML=
+    `Area <span class="sv">${(polyArea(pts)/10000).toFixed(4)} ha</span> · `+
+    `Perimeter <span class="sv">${polyPerimeter(pts).toFixed(0)} m</span> · `+
+    `Max radius <span class="sv">${maxRadius(pts,c).toFixed(0)} m</span> · `+
+    `Centre <span class="sv">${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}</span> · `+
+    `Vertices <span class="sv">${pts.length}</span>`;
+}
+
+// ─── COMPUTE ALL (no recursion with updatePreview) ────────────────────────────
+function computeAll() {
+  updatePreview(); // canvas + area stats (does NOT call back to computeAll)
+  computeA();
+  computeB();
+  computeC();
+}
+
+// ─── EXAMPLE ─────────────────────────────────────────────────────────────────
+function loadExample() {
+  document.getElementById('polygon').value=
+`-31.950200, 115.860200
+-31.950200, 115.861500
+-31.951200, 115.861500
+-31.951200, 115.860200`;
+  computeAll();
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+computeAll();
+</script>
+</body>
+</html>
