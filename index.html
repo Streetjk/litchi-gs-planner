@@ -313,6 +313,7 @@ details summary:hover { color: var(--accent); }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 // ─── LITCHI CSV ──────────────────────────────────────────────────────────────
 const HEADER = [
@@ -980,7 +981,12 @@ function downloadAll(){
     [buildPerimeter(pts),'mission_C_pass1.csv'],
   ];
   if(n('c_passes',1)>1) files.push([buildPerimeter(pts,n('c_alt2',6),n('c_pitch2',-15)),'mission_C_pass2.csv']);
-  files.forEach(([rows,name],i)=>setTimeout(()=>triggerDownload(makeCSV(rows),name),i*300));
+  const zip=new JSZip();
+  files.forEach(([rows,name])=>zip.file(name,makeCSV(rows)));
+  zip.generateAsync({type:'blob'}).then(blob=>{
+    const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'litchi_missions.zip'});
+    a.click();URL.revokeObjectURL(a.href);
+  });
 }
 
 function doDownload(rows,filename,countId,label){
