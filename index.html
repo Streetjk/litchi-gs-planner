@@ -105,6 +105,7 @@ details summary:hover { color: var(--accent); }
     <input type="text" id="searchInput" placeholder="Search address or place name…" onkeydown="if(event.key==='Enter')searchLocation()">
     <button class="btn btn-ghost btn-sm" onclick="searchLocation()">Search</button>
     <button class="btn btn-ghost btn-sm" onclick="locateMe()" title="Centre on my GPS location">📍 My location</button>
+    <button id="btn_satellite" class="btn btn-ghost btn-sm" onclick="toggleSatellite()" title="Switch between map and satellite imagery">🛰 Satellite</button>
     <button id="btn_freehand" class="btn btn-ghost btn-sm" onclick="toggleFreehand()" title="Hold mouse button and drag to trace your site boundary">✏️ Freehand</button>
     <button class="btn btn-ghost btn-sm" onclick="clearPolygon()">✕ Clear</button>
     <button class="btn btn-ghost btn-sm" onclick="loadExample()">Load example</button>
@@ -467,16 +468,42 @@ function dpSimplify(pts,tol){
 }
 
 // ─── MAP ─────────────────────────────────────────────────────────────────────
-let map, _pmLayer=null;
+let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false;
 const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null};
+
+function toggleSatellite(){
+  _satActive=!_satActive;
+  const btn=document.getElementById('btn_satellite');
+  if(_satActive){
+    map.removeLayer(_tileOSM);
+    _tileSat.addTo(map);
+    // Move satellite below overlays
+    _tileSat.bringToBack();
+    btn.textContent='🗺 Map';
+    btn.style.borderColor='var(--green)';
+    btn.style.color='var(--green)';
+  } else {
+    map.removeLayer(_tileSat);
+    _tileOSM.addTo(map);
+    btn.textContent='🛰 Satellite';
+    btn.style.borderColor='';
+    btn.style.color='';
+  }
+}
 
 function initMap() {
   map = L.map('map').setView([-31.9505, 115.8576], 13);
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  _tileOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© <a href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>',
     maxZoom:20
   }).addTo(map);
+
+  _tileSat = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'Tiles © Esri — Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong)',
+    maxZoom:20
+  }); // not added until toggled
 
   map.pm.addControls({
     position:'topleft',
