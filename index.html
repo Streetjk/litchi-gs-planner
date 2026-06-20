@@ -499,9 +499,9 @@ function toggleSatellite(){
 }
 
 function addCustomControls() {
-  // Satellite toggle — topright
+  // Satellite toggle — topleft (below Geoman toolbar)
   const SatCtrl = L.Control.extend({
-    options:{ position:'topright' },
+    options:{ position:'topleft' },
     onAdd(){
       const wrap = L.DomUtil.create('div','leaflet-bar leaflet-control map-ctrl');
       _satBtn = L.DomUtil.create('a','',wrap);
@@ -512,9 +512,9 @@ function addCustomControls() {
     }
   });
 
-  // Freehand draw — topright
+  // Freehand draw — topleft (below Geoman toolbar)
   const FhCtrl = L.Control.extend({
-    options:{ position:'topright' },
+    options:{ position:'topleft' },
     onAdd(){
       const wrap = L.DomUtil.create('div','leaflet-bar leaflet-control map-ctrl');
       _fhBtn = L.DomUtil.create('a','',wrap);
@@ -585,6 +585,38 @@ function initMap() {
   });
 
   addCustomControls();
+
+  // Ctrl+left-drag to rotate map
+  let _rotActive = false, _rotStartAngle = 0, _rotStartBearing = 0;
+
+  function _angleFromCenter(clientX, clientY) {
+    const rect = map.getContainer().getBoundingClientRect();
+    return Math.atan2(clientY - (rect.top + rect.height / 2),
+                      clientX - (rect.left + rect.width  / 2)) * 180 / Math.PI;
+  }
+
+  map.getContainer().addEventListener('mousedown', function(e) {
+    if (!e.ctrlKey || e.button !== 0 || _fhActive) return;
+    e.preventDefault();
+    _rotActive = true;
+    _rotStartAngle   = _angleFromCenter(e.clientX, e.clientY);
+    _rotStartBearing = map.getBearing ? map.getBearing() : 0;
+    map.dragging.disable();
+    map.getContainer().style.cursor = 'crosshair';
+  }, { passive: false });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!_rotActive) return;
+    const delta = _angleFromCenter(e.clientX, e.clientY) - _rotStartAngle;
+    map.setBearing(_rotStartBearing + delta);
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!_rotActive) return;
+    _rotActive = false;
+    map.dragging.enable();
+    map.getContainer().style.cursor = '';
+  });
 }
 
 function stylePolyLayer(layer) {
