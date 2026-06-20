@@ -622,6 +622,16 @@ function initMap() {
     if(_pmLayer && e.layer===_pmLayer) syncFromLayer();
   });
 
+  // Block automatic map panning (Geoman tooltip autoPan) while drawing
+  let _drawingActive = false;
+  const _origPanBy = map.panBy.bind(map);
+  const _origPanTo = map.panTo.bind(map);
+  map.panBy = function(offset, opts) { return _drawingActive ? this : _origPanBy(offset, opts); };
+  map.panTo = function(latlng, opts) { return _drawingActive ? this : _origPanTo(latlng, opts); };
+  map.on('pm:drawstart', () => { _drawingActive = true; });
+  map.on('pm:drawend',   () => { _drawingActive = false; });
+  map.on('pm:create',    () => { _drawingActive = false; });
+
   addCustomControls();
 
   // Ctrl+left-drag to rotate map
