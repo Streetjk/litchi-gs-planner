@@ -481,6 +481,16 @@ function dpSimplify(pts,tol){
   return [p1,p2];
 }
 
+// Approximate a circle (center LatLng, radius metres) as a polygon
+function circleToPolygon(center, radiusM, nPts=60) {
+  const pts=[];
+  for(let i=0;i<nPts;i++){
+    const a=(i/nPts)*2*Math.PI;
+    pts.push(fromLocal(Math.sin(a)*radiusM, Math.cos(a)*radiusM, center.lat, center.lng));
+  }
+  return pts;
+}
+
 // ─── MAP ─────────────────────────────────────────────────────────────────────
 let map, _pmLayer=null, _tileOSM=null, _tileSat=null, _satActive=false, _satBtn=null, _fhBtn=null;
 const _ov={grid1:null,grid2:null,orbitCW:null,orbitCCW:null,perim:null};
@@ -555,7 +565,7 @@ function initMap() {
   map.pm.addControls({
     position:'topleft',
     drawMarker:false, drawCircleMarker:false, drawPolyline:false,
-    drawRectangle:true, drawPolygon:true, drawCircle:false, drawText:false,
+    drawRectangle:true, drawPolygon:true, drawCircle:true, drawText:false,
     editMode:true, dragMode:true, cutPolygon:false, removalMode:true
   });
 
@@ -582,8 +592,21 @@ function initMap() {
 
   // Polygon drawn via toolbar
   map.on('pm:create', e => {
-    if(!['Polygon','Rectangle'].includes(e.shape)) return;
+    if(!['Polygon','Rectangle','Circle'].includes(e.shape)) return;
     if(_pmLayer){ map.removeLayer(_pmLayer); _pmLayer=null; }
+
+    // Circle: convert to polygon approximation + auto-set Mission B orbit radius
+    if(e.shape === 'Circle') {
+      const center = e.layer.getLatLng(), radius = e.layer.getRadius();
+      map.removeLayer(e.layer);
+      const pts = circleToPolygon(center, radius);
+      _pmLayer = L.polygon(pts.map(p=>[p.lat,p.lng]),
+        {color:'#4f9ef8',fillColor:'#4f9ef8',fillOpacity:0.08,weight:2}).addTo(map);
+      _pmLayer.on('pm:edit', syncFromLayer);
+      document.getElementById('b_radius').value = Math.round(radius);
+      syncFromLayer();
+      return;
+    }
 
     // When map is rotated, replace the north-aligned rectangle with a
     // screen-aligned polygon by projecting the four screen corners to lat/lng.
